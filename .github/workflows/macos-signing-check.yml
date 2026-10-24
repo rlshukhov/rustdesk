@@ -30,10 +30,8 @@ jobs:
       - name: Remove temporary signing material
         if: always() && env.MACOS_SIGNING_KEYCHAIN != ''
         run: |
+          # The hosted runner VM is disposable; removing admin trust can block headless jobs.
+          security delete-keychain "$MACOS_SIGNING_KEYCHAIN"
           if [ -n "${MACOS_SIGNING_CERTIFICATE:-}" ]; then
-            if ! sudo security remove-trusted-cert -d "$MACOS_SIGNING_CERTIFICATE"; then
-              echo "::warning::Could not remove temporary code-signing trust"
-            fi
             rm -f "$MACOS_SIGNING_CERTIFICATE"
           fi
-          security delete-keychain "$MACOS_SIGNING_KEYCHAIN"

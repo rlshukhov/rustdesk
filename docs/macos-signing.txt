@@ -50,8 +50,11 @@ independent. CI imports into a temporary keychain with its own random password,
 in local mode adds code-signing-only trust for the public certificate to the
 hosted runner's admin trust settings, registers the temporary keychain in the runner search list, resolves the selected
 certificate to its SHA-1 and signs a disposable probe immediately.
-It signs the app and final DMG and removes that trust, public certificate file
-and temporary keychain at job end. No trust is added to the user's Mac by CI.
+It signs the app and final DMG and removes the public certificate file and
+private temporary keychain at job end. The hosted runner VM is then destroyed,
+which removes its admin trust setting. Removing that setting synchronously is
+avoided because it can block headless jobs. No trust is added to the user's Mac
+by CI. These jobs require disposable GitHub-hosted runners.
 Missing P12 in
 local mode fails early. No notarization tools or Apple API key are needed.
 For Apple's certificate use MACOS_SIGNING_MODE=developer-id (the default), the
