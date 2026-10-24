@@ -1,9 +1,9 @@
 name: Flutter Nightly Build
 
 on:
-  schedule:
-    # schedule build every night
-    - cron: "0 0 * * *"
+  # Disabled to avoid spending runner minutes on unattended daily builds.
+  # schedule:
+  #   - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:

@@ -1,5 +1,5 @@
 name: Release
-run-name: Release v${{ inputs.version }} (Android)
+run-name: Release v${{ inputs.version }} (macOS ARM64 + Android ARM64)
 
 on:
   workflow_dispatch:
@@ -59,7 +59,7 @@ jobs:
               if (error.status !== 404) throw error;
             }
 
-  build-android:
+  build:
     needs: prepare
     # The shared workflow also declares write permissions for its skipped SBOM job.
     permissions:
@@ -67,7 +67,7 @@ jobs:
     uses: ./.github/workflows/flutter-build.yml
     secrets: inherit
     with:
-      platforms: android
+      platforms: macos-android-arm64
       upload-artifact: true
       release-version: ${{ inputs.version }}
       android-version-code: ${{ inputs.android-version-code }}
@@ -75,14 +75,14 @@ jobs:
       publish-release: false
 
   publish:
-    needs: build-android
+    needs: build
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: rustdesk-${{ inputs.version }}-*.apk
+          pattern: rustdesk-${{ inputs.version }}-*
           path: release
           merge-multiple: true
 
@@ -98,12 +98,10 @@ jobs:
             const crypto = require('crypto');
             const version = process.env.RELEASE_VERSION;
             const tag = `v${version}`;
-            const files = fs.readdirSync('release').filter(name => name.endsWith('.apk')).sort();
-            for (const arch of ['aarch64', 'armv7', 'x86_64', 'universal']) {
-              if (files.filter(name => name.startsWith(`rustdesk-${version}-${arch}-`)).length !== 1)
-                throw new Error(`Expected exactly one signed ${arch} APK`);
-            }
-            if (files.length !== 4) throw new Error('Unexpected release assets');
+            const files = fs.readdirSync('release').sort();
+            const expected = [`rustdesk-${version}-aarch64-signed.apk`, `rustdesk-${version}-aarch64.dmg`].sort();
+            if (JSON.stringify(files) !== JSON.stringify(expected))
+              throw new Error('Expected exactly one Android ARM64 APK and one macOS ARM64 DMG');
             fs.writeFileSync('release/SHA256SUMS', files.map(name =>
               `${crypto.createHash('sha256').update(fs.readFileSync(`release/${name}`)).digest('hex')}  ${name}\n`
             ).join(''));
@@ -111,7 +109,7 @@ jobs:
             const {data: release} = await github.rest.repos.createRelease({
               ...context.repo, tag_name: tag, name: `RustDesk ${version}`, draft: true,
               prerelease: process.env.PRERELEASE === 'true',
-              body: `Android release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nAPKs are signed with the repository's Android release key.`,
+              body: `macOS ARM64 and Android ARM64 release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nThe Android APK is signed with the repository's Android release key. macOS signing and notarization depend on the configured Apple signing secrets.`,
             });
             for (const name of [...files, 'SHA256SUMS']) {
               await github.rest.repos.uploadReleaseAsset({

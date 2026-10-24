@@ -10,8 +10,9 @@ on:
         type: string
         default: "nightly"
       platforms:
+        description: "macos-android-arm64, android, or all to restore every upstream target"
         type: string
-        default: all
+        default: macos-android-arm64
       release-version:
         type: string
         default: ""
@@ -124,7 +125,7 @@ jobs:
         run: python res/update/generate_update_metadata.py check-key
 
   generate-sbom:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     needs: [validate-update-metadata-keys]
     runs-on: ubuntu-latest
 
@@ -156,9 +157,11 @@ jobs:
   generate-bridge:
     needs: [validate-update-metadata-keys]
     uses: ./.github/workflows/bridge.yml
+    with:
+      windows-arm64: ${{ inputs.platforms == 'all' }}
 
   build-RustDeskTempTopMostWindow:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     needs: [validate-update-metadata-keys]
     uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
     strategy:
@@ -181,7 +184,7 @@ jobs:
       target_version: Windows10
 
   build-for-windows-flutter:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     name: ${{ matrix.job.target }}
     needs: [build-RustDeskTempTopMostWindow, generate-bridge]
     runs-on: ${{ matrix.job.os }}
@@ -576,7 +579,7 @@ jobs:
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     needs: [validate-update-metadata-keys]
     runs-on: ${{ matrix.job.os }}
@@ -758,7 +761,7 @@ jobs:
             ./SignOutput/rustdesk-*.exe
 
   build-rustdesk-ios:
-    if: ${{ inputs.platforms != 'android' && inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     name: build rustdesk ios ipa
     runs-on: ${{ matrix.job.os }}
     needs: [generate-bridge]
@@ -887,6 +890,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        exclude: ${{ inputs.platforms == 'all' && fromJSON('[]') || fromJSON('[{"arch":"x86_64"}]') }}
         job:
           - {
               target: x86_64-apple-darwin,
@@ -917,6 +921,13 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
+
+      - name: Set release version
+        if: ${{ inputs.release-version != '' }}
+        env:
+          RELEASE_VERSION: ${{ inputs.release-version }}
+          ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
+        run: python3 .github/scripts/android_release.py prepare --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE"
 
       - name: Import the codesign cert
         if: env.MACOS_P12_BASE64 != null
@@ -1086,7 +1097,7 @@ jobs:
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
       - name: Upload unsigned macOS app
-        if: env.UPLOAD_ARTIFACT == 'true'
+        if: inputs.publish-release && env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: rustdesk-unsigned-macos-${{ matrix.job.arch }}
@@ -1141,8 +1152,16 @@ jobs:
           path: ./rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg
           if-no-files-found: error
 
+      - name: Upload release macOS DMG
+        if: ${{ !inputs.publish-release && inputs.upload-artifact }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rustdesk-${{ env.VERSION }}-macos-${{ matrix.job.arch }}.dmg
+          path: ./rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg
+          if-no-files-found: error
+
       - name: Publish DMG package
-        if: env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA != 'true'
+        if: inputs.publish-release && env.UPLOAD_ARTIFACT == 'true' && env.PUBLISH_UPDATE_METADATA != 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
@@ -1153,7 +1172,7 @@ jobs:
   publish-signed-update-metadata:
     needs: [build-for-windows-flutter, build-for-windows-sciter, build-for-macOS]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.platforms != 'android' && (inputs.upload-artifact && inputs.publish-update-metadata && github.repository == 'rustdesk/rustdesk') }}
+    if: ${{ inputs.platforms == 'all' && (inputs.upload-artifact && inputs.publish-update-metadata && github.repository == 'rustdesk/rustdesk') }}
     concurrency:
       group: signed-update-${{ inputs.upload-tag }}
       cancel-in-progress: false
@@ -1291,7 +1310,7 @@ jobs:
       - build-for-windows-flutter
       - build-for-windows-sciter
     runs-on: ubuntu-latest
-    if: ${{ inputs.platforms != 'android' && inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1353,6 +1372,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        exclude: ${{ inputs.platforms == 'all' && fromJSON('[]') || fromJSON('[{"arch":"armv7"},{"arch":"x86_64"}]') }}
         job:
           - {
               arch: aarch64,
@@ -1677,7 +1697,7 @@ jobs:
   build-rustdesk-android-universal:
     needs: [build-rustdesk-android]
     name: build rustdesk android universal apk
-    if: ${{ inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     runs-on: ubuntu-24.04
     env:
       reltype: release
@@ -1896,7 +1916,7 @@ jobs:
             signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
 
   build-rustdesk-linux:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     needs: [generate-bridge]
     name: build rustdesk linux ${{ matrix.job.target }}
     runs-on: ${{ matrix.job.on }}
@@ -2246,7 +2266,7 @@ jobs:
   # old for it. A separate job rather than a matrix entry of build-rustdesk-linux: appimage and
   # flatpak need that job, and a failure here must not skip them.
   build-rustdesk-linux-drm:
-    if: ${{ inputs.platforms != 'android' }}
+    if: ${{ inputs.platforms == 'all' }}
     needs: [generate-bridge]
     name: build rustdesk linux drm x86_64
     runs-on: ubuntu-22.04
@@ -2566,7 +2586,7 @@ jobs:
           path: ${{ env.DRM_DEB }}
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.platforms != 'android' && inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     needs: [validate-update-metadata-keys]
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
@@ -2812,7 +2832,7 @@ jobs:
     name: Build appimage ${{ matrix.job.target }}
     needs: [build-rustdesk-linux]
     runs-on: ubuntu-22.04
-    if: ${{ inputs.platforms != 'android' && inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     strategy:
       fail-fast: false
       matrix:
@@ -2867,7 +2887,7 @@ jobs:
       - build-rustdesk-linux
       - build-rustdesk-linux-sciter
     runs-on: ${{ matrix.job.on }}
-    if: ${{ inputs.platforms != 'android' && inputs.upload-artifact }}
+    if: ${{ inputs.platforms == 'all' && inputs.upload-artifact }}
     strategy:
       fail-fast: false
       matrix:

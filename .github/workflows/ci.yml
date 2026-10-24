@@ -66,6 +66,8 @@ jobs:
   #       args: --locked
 
   build:
+    # Standalone Linux CI is retained but disabled for this ARM64-only fork.
+    if: ${{ vars.ENABLE_LEGACY_LINUX_CI == 'true' }}
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
     strategy:

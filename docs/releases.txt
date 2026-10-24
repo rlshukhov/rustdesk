@@ -1,9 +1,11 @@
 Manual releases
 
 The Release workflow (.github/workflows/release.yml) builds the master commit
-selected at dispatch time. It currently publishes Android only: ARM64, ARMv7,
-x86_64 and universal APKs, plus SHA256SUMS. macOS can later be added as another
-build job before the shared publish job.
+selected at dispatch time. It publishes one Android ARM64 APK and one macOS
+ARM64 DMG, plus SHA256SUMS. The Android APK is signed with the Android Secrets.
+The DMG is unsigned unless the existing Apple signing Secrets are configured:
+MACOS_P12_BASE64, MACOS_P12_PASSWORD, MACOS_CODESIGN_IDENTITY and MACOS_NOTARIZE_JSON.
+Android signing keys cannot sign macOS applications.
 
 Setup
 In repository Settings > Secrets and variables > Actions, create:
@@ -29,21 +31,21 @@ select master, enter the version without v (X.Y.Z or X.Y.Z-N) and an Android
 versionCode greater than every previously released base build number. Choose
 whether this is a prerelease. Runs against other branches are rejected.
 
-VersionName is the supplied version; universal uses the supplied versionCode.
-Flutter adds ABI offsets to split APK versionCodes: ARMv7 +1000, ARM64 +2000,
-x86_64 +4000. Continue using the same APK variant for updates. The base code must
-also exceed the number in pubspec.yaml; leave room for the largest ABI offset
-below Android's 2100000000 limit.
+VersionName is the supplied version. Flutter adds +2000 to the supplied base
+versionCode for the ARM64 split APK. Continue using this APK variant for updates.
+The base code must also exceed the number in pubspec.yaml; leave room for the
+largest ABI offset below Android's 2100000000 limit.
 
 Version stamping changes Cargo.toml, the root Cargo.lock package and pubspec.yaml
 only inside CI's disposable checkout. It does not commit generated version edits.
 The vVERSION tag points to the exact master source commit used for the build.
 An existing tag is never moved or reused. After all builds and signature/version
-checks pass, the workflow creates the tag and a draft release, uploads every APK
-and the checksums, then publishes it. If publication fails, inspect the draft
+checks pass, the workflow creates the tag and a draft release, uploads both
+assets and the checksums, then publishes it. If publication fails, inspect the draft
 release/tag before choosing a new version; reruns do not overwrite an existing tag.
-Missing signing secrets fail the build; the manual workflow has no unsigned
-release fallback. Tags created using GITHUB_TOKEN do not trigger Flutter Tag Build.
+Missing Android signing secrets fail the build; the manual workflow has no
+unsigned Android release fallback. Tags created using GITHUB_TOKEN do not
+trigger Flutter Tag Build.
 
 The application ID is com.carriez.flutter_hbb. This release key differs from the
 official RustDesk key and from a local debug key: the first installation cannot
@@ -56,9 +58,21 @@ Validation and regression surface
 The shared workflow already contains a legacy `if: False` lint diagnostic in its
 disabled web job; it is unrelated to this release workflow.
 
-Existing runtime/app code is unchanged. flutter-build.yml adds optional inputs,
-Android version/signature checks and deferred publication. The Android-only mode
-skips other platform jobs and selects the pinned NDK for native APK packaging.
-Existing callers retain their default platform, version and publication behavior.
-.gitignore additionally excludes Android keystore formats. Release automation,
-its Python helper and tests are the only new executable paths.
+Build scope and regression surface
+Existing runtime/app code is unchanged. The shared flutter-build.yml defaults to
+platforms: macos-android-arm64 for Release, Full Flutter CI, Tag and Nightly.
+Only aarch64-apple-darwin and aarch64-linux-android app builds run. Other platform
+jobs and matrix entries are retained; setting platforms: all in a caller restores
+those upstream targets. The Android-only profile remains available as android.
+
+bridge.yml prepares the common bridge once on Ubuntu, using Flutter 3.22.3.
+This is a build prerequisite, not a Linux application. The additional Flutter
+3.44 bridge is generated only when platforms: all enables Windows ARM64.
+ci.yml retains its standalone Linux job but runs it only when the repository
+variable ENABLE_LEGACY_LINUX_CI is explicitly true. flutter-nightly.yml keeps
+manual dispatch; its daily schedule is commented out to save runner minutes.
+
+release.yml collects just the ARM64 APK and DMG and publishes them together.
+The shared macOS job stamps the requested release version and uploads its final
+DMG after optional signing; deferred publication prevents an early release.
+No release or paid build is started automatically by the release workflow.
