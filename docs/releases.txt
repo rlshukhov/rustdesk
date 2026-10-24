@@ -71,6 +71,13 @@ This is a build prerequisite, not a Linux application. The additional Flutter
 ci.yml retains its standalone Linux job but runs it only when the repository
 variable ENABLE_LEGACY_LINUX_CI is explicitly true. flutter-nightly.yml keeps
 manual dispatch; its daily schedule is commented out to save runner minutes.
+flutter-ci.yml also keeps manual dispatch; its push/PR triggers are commented out.
+checks.yml replaces automatic builds with one Ubuntu job capped at five minutes:
+release version tests, existing update-signature/CLI tests, and pinned actionlint
+with a verified download checksum. It needs neither submodules nor Rust, Flutter,
+Android SDK or signing Secrets. Superseded checks are cancelled automatically.
+These checks do not compile application code. Dart, Kotlin and Rust tests remain
+in the manually dispatched Full Flutter CI build for the two ARM64 targets.
 
 release.yml collects just the ARM64 APK and DMG and publishes them together.
 The shared macOS job stamps the requested release version and uploads its final
