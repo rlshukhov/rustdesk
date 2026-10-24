@@ -1112,7 +1112,7 @@ jobs:
             fi
           fi
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --keychain "$MACOS_SIGNING_KEYCHAIN" --sign "$MACOS_CODESIGN_IDENTITY" "rustdesk-${VERSION}.dmg"
+          codesign --force --keychain "$MACOS_SIGNING_KEYCHAIN" --sign "${MACOS_SIGNING_IDENTITY:-$MACOS_CODESIGN_IDENTITY}" "rustdesk-${VERSION}.dmg"
           if [ "$MACOS_SIGNING_MODE" = developer-id ]; then
             rcodesign notary-submit --api-key-path "$GITHUB_WORKSPACE/rustdesk.json" --staple "rustdesk-${VERSION}.dmg"
           fi

@@ -1,0 +1,39 @@
+name: macOS signing check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/scripts/import-macos-signing.sh'
+      - '.github/scripts/sign-macos-app.sh'
+      - '.github/workflows/macos-signing-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  signing:
+    runs-on: macos-14
+    timeout-minutes: 5
+    env:
+      MACOS_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
+      MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+      MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE || 'developer-id' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Import certificate and sign probe
+        run: bash .github/scripts/import-macos-signing.sh
+      - name: Remove temporary signing material
+        if: always() && env.MACOS_SIGNING_KEYCHAIN != ''
+        run: |
+          if [ -n "${MACOS_SIGNING_CERTIFICATE:-}" ]; then
+            if ! sudo security remove-trusted-cert -d "$MACOS_SIGNING_CERTIFICATE"; then
+              echo "::warning::Could not remove temporary code-signing trust"
+            fi
+            rm -f "$MACOS_SIGNING_CERTIFICATE"
+          fi
+          security delete-keychain "$MACOS_SIGNING_KEYCHAIN"

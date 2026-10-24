@@ -48,7 +48,8 @@ Use `base64 < identity.p12 | tr -d '\n' | pbcopy` locally to copy the P12 Secret
 The Release workflow uses these settings automatically; Android signing is
 independent. CI imports into a temporary keychain with its own random password,
 in local mode adds code-signing-only trust for the public certificate to the
-hosted runner's admin trust settings, then signs a disposable probe immediately.
+hosted runner's admin trust settings, registers the temporary keychain in the runner search list, resolves the selected
+certificate to its SHA-1 and signs a disposable probe immediately.
 It signs the app and final DMG and removes that trust, public certificate file
 and temporary keychain at job end. No trust is added to the user's Mac by CI.
 Missing P12 in

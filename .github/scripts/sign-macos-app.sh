@@ -3,7 +3,7 @@
 set -euo pipefail
 
 app_path=$1
-identity=$2
+identity=${MACOS_SIGNING_IDENTITY:-$2}
 entitlements=$3
 
 sign_args=(--force --sign "$identity")
