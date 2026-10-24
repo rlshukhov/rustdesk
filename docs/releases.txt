@@ -85,3 +85,13 @@ release.yml collects just the ARM64 APK and DMG and publishes them together.
 The shared macOS job stamps the requested release version and uploads its final
 DMG after optional signing; deferred publication prevents an early release.
 No release or paid build is started automatically by the release workflow.
+
+Release descriptions
+Each version requires a nonempty docs/release-notes/VERSION.md. The Release
+prepare job validates it before builds; publish renders it with release_notes.py,
+then appends version, Android versionCode and the exact source commit.
+The Release notes workflow updates descriptions of already published matching
+tags when notes are pushed to master. It skips unreleased versions and never
+changes tags, assets or draft/prerelease flags. It uses GITHUB_TOKEN with contents
+write permission; it does not require a locally stored GitHub credential.
+Update README.md when user-visible fork behavior changes.

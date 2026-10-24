@@ -42,8 +42,9 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
         run: |
-          python3 -m unittest discover -s .github/scripts -p test_android_release.py
+          python3 -m unittest discover -s .github/scripts -p "test_*release*.py"
           python3 .github/scripts/android_release.py check --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE"
+          python3 .github/scripts/release_notes.py --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE" --sha "$GITHUB_SHA" > /dev/null
 
       - name: Require macOS release signing
         env:
@@ -105,6 +106,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Render release notes
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
+        run: python3 .github/scripts/release_notes.py --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE" --sha "$GITHUB_SHA" > release-notes.md
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: rustdesk-${{ inputs.version }}-*
@@ -134,7 +145,7 @@ jobs:
             const {data: release} = await github.rest.repos.createRelease({
               ...context.repo, tag_name: tag, name: `RustDesk ${version}`, draft: true,
               prerelease: process.env.PRERELEASE === 'true',
-              body: `macOS ARM64 and Android ARM64 release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nThe Android APK is signed with the repository's Android release key. macOS signing uses the configured macOS certificate. Notarization is performed only in developer-id mode.`,
+              body: fs.readFileSync('release-notes.md', 'utf8'),
             });
             for (const name of [...files, 'SHA256SUMS']) {
               await github.rest.repos.uploadReleaseAsset({

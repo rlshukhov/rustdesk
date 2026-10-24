@@ -39,7 +39,7 @@ jobs:
 
       - name: Test release versions and update signatures
         run: |
-          python -m unittest discover -s .github/scripts -p test_android_release.py
+          python -m unittest discover -s .github/scripts -p "test_*release*.py"
           python -m unittest res/update/test_generate_update_metadata.py res/update/test_update_metadata_cli.py
 
       - name: Install pinned actionlint
@@ -60,4 +60,5 @@ jobs:
             .github/workflows/flutter-tag.yml \
             .github/workflows/flutter-build.yml \
             .github/workflows/bridge.yml \
-            .github/workflows/release.yml
+            .github/workflows/release.yml \
+            .github/workflows/release-notes.yml

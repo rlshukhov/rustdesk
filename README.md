@@ -1,182 +1,70 @@
-<p align="center">
-  <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
-  <a href="#raw-steps-to-build">Build</a> •
-  <a href="#how-to-build-with-docker">Docker</a> •
-  <a href="#file-structure">Structure</a> •
-  <a href="#screenshots">Screenshots</a><br>
-  [<a href="docs/README-UA.md">Українська</a>] | [<a href="docs/README-CS.md">česky</a>] | [<a href="docs/README-ZH.md">中文</a>] | [<a href="docs/README-HU.md">Magyar</a>] | [<a href="docs/README-ES.md">Español</a>] | [<a href="docs/README-FA.md">فارسی</a>] | [<a href="docs/README-FR.md">Français</a>] | [<a href="docs/README-DE.md">Deutsch</a>] | [<a href="docs/README-PL.md">Polski</a>] | [<a href="docs/README-ID.md">Indonesian</a>] | [<a href="docs/README-FI.md">Suomi</a>] | [<a href="docs/README-ML.md">മലയാളം</a>] | [<a href="docs/README-JP.md">日本語</a>] | [<a href="docs/README-NL.md">Nederlands</a>] | [<a href="docs/README-IT.md">Italiano</a>] | [<a href="docs/README-RU.md">Русский</a>] | [<a href="docs/README-PTPT.md">Português (Portugal)</a>] | [<a href="docs/README-PTBR.md">Português (Brasil)</a>] | [<a href="docs/README-EO.md">Esperanto</a>] | [<a href="docs/README-KR.md">한국어</a>] | [<a href="docs/README-AR.md">العربي</a>] | [<a href="docs/README-VN.md">Tiếng Việt</a>] | [<a href="docs/README-DA.md">Dansk</a>] | [<a href="docs/README-GR.md">Ελληνικά</a>] | [<a href="docs/README-TR.md">Türkçe</a>] | [<a href="docs/README-NO.md">Norsk</a>] | [<a href="docs/README-RO.md">Română</a>]<br>
-  <b>We need your help to translate this README, <a href="https://github.com/rustdesk/rustdesk/tree/master/src/lang">RustDesk UI</a> and <a href="https://github.com/rustdesk/doc.rustdesk.com">RustDesk Doc</a> to your native language</b>
-</p>
+# RustDesk: форк с оптимизациями macOS и Android
 
-> [!Caution]
-> **Misuse Disclaimer:** <br>
-> The developers of RustDesk do not condone or support any unethical or illegal use of this software. Misuse, such as unauthorized access, control or invasion of privacy, is strictly against our guidelines. The authors are not responsible for any misuse of the application.
+Неофициальный форк [RustDesk](https://github.com/rustdesk/rustdesk) для удалённого управления Mac с Android. Основные изменения — аппаратное декодирование с выводом в текстуру на Android, нативный захват и кодирование на macOS, уменьшение лишних копирований кадров и управление AWDL во время сеанса.
 
+[Скачать сборки](https://github.com/rlshukhov/rustdesk/releases) · [Изменения по версиям](docs/release-notes) · [Исходный RustDesk](https://github.com/rustdesk/rustdesk)
 
-Chat with us: [Discord](https://discord.gg/nDceKgxnkV) | [Twitter](https://twitter.com/rustdesk) | [Reddit](https://www.reddit.com/r/rustdesk) | [YouTube](https://www.youtube.com/@rustdesk)
+## Что изменено
 
-[![RustDesk Server Pro](https://img.shields.io/badge/RustDesk%20Server%20Pro-Advanced%20Features-blue)](https://rustdesk.com/pricing.html)
+### Android: аппаратное декодирование прямо в текстуру
 
-Yet another remote desktop solution, written in Rust. Works out of the box with no configuration required. You have full control of your data, with no concerns about security. You can use our rendezvous/relay server, [set up your own](https://rustdesk.com/server), or [write your own rendezvous/relay server](https://github.com/rustdesk/rustdesk-server-demo).
+H.264 и HEVC декодируются через аппаратный MediaCodec в SurfaceTexture Flutter. Это убирает преобразование декодированных пикселей в RGBA на CPU и их передачу через прежний программный путь. Очереди ограничены; готовые изображения передаются с учётом потребления текстуры Flutter.
 
-![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
+Нужны Android 10+ и включённая настройка «Аппаратные кодеки». Если устройство или кодек не поддерживаются либо аппаратный декодер сообщает об ошибке, используется программный путь. Монитор качества показывает активный путь, FPS и состояние очередей. Подробное логирование по умолчанию выключено.
 
-RustDesk welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for help getting started.
+[Устройство Android-пути и ограничения](docs/android-texture-decoder.txt).
 
-[**FAQ**](https://github.com/rustdesk/rustdesk/wiki/FAQ)
+### macOS: нативный захват и аппаратное кодирование
 
-[**BINARY DOWNLOAD**](https://github.com/rustdesk/rustdesk/releases)
+ScreenCaptureKit захватывает NV12-поверхности, которые напрямую передаются в аппаратный VideoToolbox. На пути потокового видео нет прежнего копирования BGRA-кадров и преобразования цвета на CPU. Число кадров в обработке ограничено четырьмя; все готовые пакеты забираются по порядку. Предел захвата — 60 FPS.
 
-[**NIGHTLY BUILD**](https://github.com/rustdesk/rustdesk/releases/tag/nightly)
+Нативный захват **по умолчанию выключен**. На macOS 12.3+ его можно включить в **Настройки → Основные → Аппаратные кодеки → «Использовать нативный захват видео macOS»**, затем переподключиться. Он работает для входящих сеансов H.264/HEVC 4:2:0. При ошибке сохраняется возможность вернуться к прежнему видеопути.
 
-[<img src="https://f-droid.org/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80">](https://f-droid.org/en/packages/com.carriez.flutter_hbb)
-[<img src="https://flathub.org/api/badge?svg&locale=en"
-    alt="Get it on Flathub"
-    height="80">](https://flathub.org/apps/com.rustdesk.RustDesk)
+[Устройство macOS-пути и ограничения](docs/macos-native-video.txt).
 
-## Dependencies
+### macOS: меньше регулярных Wi-Fi-фризов из-за AWDL
 
-Desktop versions use Flutter or Sciter (deprecated) for GUI. This tutorial is for Sciter only, since it is easier and more friendly to start. Check out our [CI](https://github.com/rustdesk/rustdesk/blob/master/.github/workflows/flutter-build.yml) for building the Flutter version.
+Добавлена настройка **«Приостанавливать AWDL во время входящих сеансов»** в разделе безопасности. Она временно отключает интерфейс, который используют AirDrop и Continuity, и восстанавливает исходное состояние после последнего сеанса. Нужна установленная служба RustDesk. Если macOS включает AWDL во время подключения, служба повторно применяет настройку.
 
-Please download Sciter dynamic library yourself.
+Опция выключена по умолчанию. На тестовом Mac её включение устранило наблюдавшиеся регулярные подвисания примерно каждые полсекунды. Эффект зависит от Wi-Fi-сети и активности AWDL.
 
-[Windows](https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.win/x64/sciter.dll) |
-[Linux](https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so) |
-[macOS](https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.osx/libsciter.dylib)
+[Как работает управление AWDL](docs/macos-awdl.txt).
 
-## Raw Steps to build
+## Результаты замеров
 
-- Prepare your Rust development env and C++ build env
+Короткие проверки проводились на MacBook Pro 14 с M2 Pro и Android-устройстве Samsung Fold, при передаче экрана 3024×1964 с тестовой анимацией. Проценты CPU ниже считаются относительно **одного ядра**: 100% — одно полностью занятое ядро.
 
-- Install [vcpkg](https://github.com/microsoft/vcpkg), and set `VCPKG_ROOT` env variable correctly
+| Проверка | Прежний путь | Новый путь |
+|---|---:|---:|
+| Android: CPU приложения, раннее сравнение при ≈23–25 кадрах/с | программный: 91% | аппаратный: 21% |
+| Mac: CPU процесса хоста, видеопути с разным FPS | ≈45% | ≈10% |
+| Mac: RSS процесса хоста | ≈283 МиБ | ≈115 МиБ |
 
-  - Windows: vcpkg install libvpx:x64-windows-static libyuv:x64-windows-static opus:x64-windows-static aom:x64-windows-static
-  - Linux/macOS: vcpkg install libvpx libyuv opus aom
+В этих проверках нагрузка CPU Android уменьшилась примерно на **77%**, Mac — примерно на **78%**, а RSS процесса хоста Mac — примерно на **59%**. Это снижение вычислительных затрат; автономность и потребление всего устройства в ваттах отдельно не подтверждены.
 
-- run `cargo run`
+Android-путь в коротком USB-контроле с прежним захватом Mac достигал около **63 FPS** декодирования и потребления текстуры. В итоговом нативном пути Mac контрольный замер дал около **52 FPS** декодирования и **51 FPS** потребления текстуры; среднее время от подачи кадра в кодировщик до выдачи пакета — около **36 мс**. Повышение потолка захвата до 70 и 120 не дало убедительного выигрыша, поэтому оставлен предел 60.
 
-## [Build](https://rustdesk.com/docs/en/dev/build/)
+Главный подтверждённый выигрыш нативного пути Mac — меньшие CPU и память. Его FPS пока ниже прежнего пути; стабильные 60+ FPS и отсутствие роста полной задержки управления не гарантируются. Стабильность сеанса в тестовой Wi-Fi-сети улучшило отключение AWDL. Эти эффекты нельзя приписывать одному только аппаратному кодированию. Потребление текстуры также не равно числу физически показанных кадров на дисплее.
 
-## How to Build on Linux
+## Скачать и установить
 
-### Ubuntu 18 (Debian 10)
+В [Releases этого форка](https://github.com/rlshukhov/rustdesk/releases) публикуются **Android ARM64 APK** и **macOS ARM64 DMG**. Новые выпуски подписываются постоянными ключами форка. Поддержка сборок для остальных платформ в исходниках сохранена, но текущий release workflow их не собирает.
 
-```sh
-sudo apt install -y zip g++ gcc git curl wget nasm yasm libgtk-3-dev clang libxcb-randr0-dev libxdo-dev \
-        libxfixes-dev libxcb-shape0-dev libxcb-xfixes0-dev libasound2-dev libpulse-dev cmake make \
-        libclang-dev ninja-build libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
-```
+**Подписи форка несовместимы с официальными сборками RustDesk и локальными debug-сборками.** Перед первым переходом экспортируйте настройки.
 
-### openSUSE Tumbleweed
+- **Android:** официальный APK нельзя обновить поверх него APK этого форка. После экспорта настроек удалите приложение с другой подписью, установите APK из релиза и импортируйте настройки. Последующие релизы форка с тем же ключом можно устанавливать как обновления.
+- **macOS:** замените приложение в `/Applications/RustDesk.app` и перезапустите приложение и службу. При первом переходе на подпись форка разрешения macOS может потребоваться выдать заново. Постоянный сертификат позволяет сохранять идентичность при дальнейших обновлениях, но не гарантирует отсутствие всех системных запросов. Локальный сертификат не является Apple Developer ID или нотариализацией: macOS может потребовать разрешить первый запуск в настройках безопасности.
 
-```sh
-sudo zypper install gcc-c++ git curl wget nasm yasm gcc gtk3-devel clang libxcb-devel libXfixes-devel cmake alsa-lib-devel gstreamer-devel gstreamer-plugins-base-devel xdotool-devel
-```
+Выпуск `1.5.1-1` предшествует добавлению постоянной подписи macOS; сведения выше о новых подписанных DMG относятся к следующим выпускам.
 
-### Fedora 28 (CentOS 8)
+[Подпись и обновления macOS](docs/macos-signing.txt) · [Настройка и запуск релиза](docs/releases.txt).
 
-```sh
-sudo yum -y install gcc-c++ git curl wget nasm yasm gcc gtk3-devel clang libxcb-devel libxdo-devel libXfixes-devel pulseaudio-libs-devel cmake alsa-lib-devel gstreamer1-devel gstreamer1-plugins-base-devel
-```
+## Разработка
 
-### Arch (Manjaro)
+Код приложения находится в `src/` и `flutter/`, захват и кодеки — в `libs/scrap/`. Сборочные зависимости, платформы и команды заданы в [GitHub Actions](.github/workflows/flutter-build.yml). Секреты, локальные SDK, результаты профилирования и ключи подписи в репозиторий не включаются.
 
-```sh
-sudo pacman -Syu --needed unzip git cmake gcc curl wget yasm nasm zip make pkg-config clang gtk3 xdotool libxcb libxfixes alsa-lib pipewire
-```
+При изменении пользовательского поведения обновляйте этот README и заметки соответствующего выпуска в `docs/release-notes/`. Релиз без отдельного описания изменений не проходит предварительную проверку. Изменение заметок в master обновляет текст уже опубликованного выпуска, не заменяя его бинарные файлы.
 
-### Install vcpkg
+## Происхождение и лицензия
 
-```sh
-git clone https://github.com/microsoft/vcpkg
-cd vcpkg
-git checkout 2023.04.15
-cd ..
-vcpkg/bootstrap-vcpkg.sh
-export VCPKG_ROOT=$HOME/vcpkg
-vcpkg/vcpkg install libvpx libyuv opus aom
-```
-
-### Fix libvpx (For Fedora)
-
-```sh
-cd vcpkg/buildtrees/libvpx/src
-cd *
-./configure
-sed -i 's/CFLAGS+=-I/CFLAGS+=-fPIC -I/g' Makefile
-sed -i 's/CXXFLAGS+=-I/CXXFLAGS+=-fPIC -I/g' Makefile
-make
-cp libvpx.a $HOME/vcpkg/installed/x64-linux/lib/
-cd
-```
-
-### Build
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-git clone --recurse-submodules https://github.com/rustdesk/rustdesk
-cd rustdesk
-mkdir -p target/debug
-wget https://raw.githubusercontent.com/c-smile/sciter-sdk/master/bin.lnx/x64/libsciter-gtk.so
-mv libsciter-gtk.so target/debug
-VCPKG_ROOT=$HOME/vcpkg cargo run
-```
-
-## How to build with Docker
-
-Begin by cloning the repository and building the Docker container:
-
-```sh
-git clone https://github.com/rustdesk/rustdesk
-cd rustdesk
-git submodule update --init --recursive
-docker build -t "rustdesk-builder" .
-```
-
-Then, each time you need to build the application, run the following command:
-
-```sh
-docker run --rm -it -v $PWD:/home/user/rustdesk -v rustdesk-git-cache:/home/user/.cargo/git -v rustdesk-registry-cache:/home/user/.cargo/registry -e PUID="$(id -u)" -e PGID="$(id -g)" rustdesk-builder
-```
-
-Note that the first build may take longer before dependencies are cached, subsequent builds will be faster. Additionally, if you need to specify different arguments to the build command, you may do so at the end of the command in the `<OPTIONAL-ARGS>` position. For instance, if you wanted to build an optimized release version, you would run the command above followed by `--release`. The resulting executable will be available in the target folder on your system, and can be run with:
-
-```sh
-target/debug/rustdesk
-```
-
-Or, if you're running a release executable:
-
-```sh
-target/release/rustdesk
-```
-
-Please ensure that you run these commands from the root of the RustDesk repository, or the application may not find the required resources. Also note that other cargo subcommands such as `install` or `run` are not currently supported via this method as they would install or run the program inside the container instead of the host.
-
-## File Structure
-
-- **[libs/hbb_common](https://github.com/rustdesk/rustdesk/tree/master/libs/hbb_common)**: video codec, config, tcp/udp wrapper, and some other utility functions shared with the server
-- **[libs/base](https://github.com/rustdesk/rustdesk/tree/master/libs/base)**: protobuf, fs functions for file transfer, keyboard and platform code used only by this app
-- **[libs/scrap](https://github.com/rustdesk/rustdesk/tree/master/libs/scrap)**: screen capture
-- **[libs/enigo](https://github.com/rustdesk/rustdesk/tree/master/libs/enigo)**: platform specific keyboard/mouse control
-- **[libs/clipboard](https://github.com/rustdesk/rustdesk/tree/master/libs/clipboard)**: file copy and paste implementation for Windows, Linux, macOS.
-- **[src/ui](https://github.com/rustdesk/rustdesk/tree/master/src/ui)**: obsolete Sciter UI (deprecated)
-- **[src/server](https://github.com/rustdesk/rustdesk/tree/master/src/server)**: audio/clipboard/input/video services, and network connections
-- **[src/client.rs](https://github.com/rustdesk/rustdesk/tree/master/src/client.rs)**: start a peer connection
-- **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: Communicate with [rustdesk-server](https://github.com/rustdesk/rustdesk-server), wait for remote direct (TCP hole punching) or relayed connection
-- **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: platform specific code
-- **[flutter](https://github.com/rustdesk/rustdesk/tree/master/flutter)**: Flutter code for desktop and mobile
-
-## Screenshots
-
-![Connection Manager](https://github.com/rustdesk/rustdesk/assets/28412477/db82d4e7-c4bc-4823-8e6f-6af7eadf7651)
-
-![Connected to a Windows PC](https://github.com/rustdesk/rustdesk/assets/28412477/9baa91e9-3362-4d06-aa1a-7518edcbd7ea)
-
-![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
-
-![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-
+Основа форка — RustDesk, исходная точка до наших изменений: [`8814503e0`](https://github.com/rustdesk/rustdesk/commit/8814503e0). Форк не является официальным выпуском RustDesk и не связан с его разработчиками. Лицензия — [AGPL-3.0](LICENCE); исходные уведомления об авторских правах сохранены.

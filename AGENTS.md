@@ -230,3 +230,13 @@ Then translate that source into the file's target language (infer the language f
 * New English-text keys use sentence case, not Title Case: `Use ID whitelisting`, **not** `Use ID Whitelisting`. Acronyms (ID, IP, 2FA…) stay uppercase. Legacy Title-Case keys (e.g. `Use IP Whitelisting`) stay as-is — do not rename them.
 * Since the key itself is the English display text, a sentence-case key usually needs **no** `en.rs` entry; add one only when the display text must differ from the key (e.g. `*_tip` keys).
 * Append each new key to `template.rs` (with `""`) and to every `src/lang/*.rs` file (translated, or `""` if unsure; always `""` for `it.rs`), at the end of the list.
+
+## Fork documentation and releases
+
+* When user-visible fork behavior changes, update README.md and the relevant
+  docs/release-notes/VERSION.md in the same change. Pure internal changes do not
+  need a README rewrite.
+* Release notes describe user-facing changes first. Keep build metadata at the
+  end; signing implementation details belong in docs/macos-signing.txt.
+* Performance claims must state the tested conditions and distinguish CPU/memory,
+  texture consumption, displayed FPS, battery life and end-to-end input latency.

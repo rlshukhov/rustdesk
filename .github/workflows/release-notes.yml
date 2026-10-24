@@ -1,0 +1,52 @@
+name: Release notes
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/release-notes/**'
+      - '.github/scripts/release_notes.py'
+      - '.github/workflows/release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-notes
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Update descriptions of published releases
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            const fs = require('fs');
+            const {execFileSync} = require('child_process');
+            for (const file of fs.readdirSync('docs/release-notes').filter(x => x.endsWith('.md')).sort()) {
+              const version = file.slice(0, -3);
+              let release;
+              try {
+                ({data: release} = await github.rest.repos.getReleaseByTag({...context.repo, tag: `v${version}`}));
+              } catch (error) {
+                if (error.status === 404) continue;
+                throw error;
+              }
+              if (release.draft) continue;
+              const code = release.body?.match(/Android versionCode:\s*(\d+)/)?.[1];
+              if (!code) throw new Error(`Missing Android versionCode in ${release.tag_name}`);
+              const {data: commit} = await github.rest.repos.getCommit({...context.repo, ref: release.tag_name});
+              const body = execFileSync('python3', ['.github/scripts/release_notes.py',
+                '--version', version, '--code', code, '--sha', commit.sha], {encoding: 'utf8'});
+              if (release.body === body) continue;
+              await github.rest.repos.updateRelease({...context.repo, release_id: release.id, body});
+              await core.summary.addLink(`Updated ${release.tag_name}`, release.html_url).write();
+            }
