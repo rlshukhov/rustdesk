@@ -45,6 +45,31 @@ jobs:
           python3 -m unittest discover -s .github/scripts -p test_android_release.py
           python3 .github/scripts/android_release.py check --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE"
 
+      - name: Require macOS release signing
+        env:
+          MACOS_P12_BASE64: ${{ secrets.MACOS_P12_BASE64 }}
+          MACOS_P12_PASSWORD: ${{ secrets.MACOS_P12_PASSWORD }}
+          MACOS_CODESIGN_IDENTITY: ${{ secrets.MACOS_CODESIGN_IDENTITY }}
+          MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE || 'developer-id' }}
+          MACOS_NOTARIZE_JSON: ${{ secrets.MACOS_NOTARIZE_JSON }}
+        run: |
+          for name in MACOS_P12_BASE64 MACOS_P12_PASSWORD MACOS_CODESIGN_IDENTITY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing Actions secret: $name"
+              exit 1
+            fi
+          done
+          case "$MACOS_SIGNING_MODE" in
+            local) ;;
+            developer-id)
+              if [ -z "$MACOS_NOTARIZE_JSON" ]; then
+                echo "::error::Developer ID signing requires MACOS_NOTARIZE_JSON; use MACOS_SIGNING_MODE=local for the local certificate"
+                exit 1
+              fi
+              ;;
+            *) echo "::error::Invalid MACOS_SIGNING_MODE"; exit 1 ;;
+          esac
+
       - name: Require a new tag
         uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
         env:

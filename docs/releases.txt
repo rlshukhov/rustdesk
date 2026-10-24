@@ -3,8 +3,9 @@ Manual releases
 The Release workflow (.github/workflows/release.yml) builds the master commit
 selected at dispatch time. It publishes one Android ARM64 APK and one macOS
 ARM64 DMG, plus SHA256SUMS. The Android APK is signed with the Android Secrets.
-The DMG is unsigned unless macOS signing Secrets are configured. Both a local
-self-signed certificate and an Apple Developer ID certificate are supported.
+The manual release requires macOS signing Secrets before starting the builds.
+Both a local self-signed certificate and an Apple Developer ID certificate are
+supported. Other shared-workflow callers can still build an unsigned DMG.
 See docs/macos-signing.txt for setup, Secrets, and stable update identities.
 Android signing keys cannot sign macOS applications.
 
