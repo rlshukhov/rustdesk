@@ -51,13 +51,11 @@ impl Lease {
                 self.state = State::Paused;
             }
             State::Paused if interface.is_up().await? => {
-                // Respect macOS or another program re-enabling AWDL; do not fight it every second.
-                interface.clear_restore()?;
-                self.state = State::Blocked;
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "AWDL was re-enabled outside RustDesk",
-                ));
+                // macOS can re-enable AWDL during a session. The daemon polls at most once
+                // per second; keep the original restore marker while reapplying the opt-in.
+                self.state = State::RestorePending;
+                interface.set_up(false).await?;
+                self.state = State::Paused;
             }
             State::RestorePending => {
                 self.restore(interface).await?;
@@ -152,7 +150,7 @@ mod tests {
     }
 
     #[hbb_common::tokio::test]
-    async fn errors_and_external_reenable_do_not_repeatedly_toggle_awdl() {
+    async fn command_errors_restore_and_external_reenable_is_paused_again() {
         let mut interface = device(true);
         interface.fail_down = true;
         let mut lease = Lease::default();
@@ -166,10 +164,13 @@ mod tests {
         interface.fail_down = false;
         lease.update(true, &mut interface).await.unwrap();
         interface.up = true;
-        assert!(lease.update(true, &mut interface).await.is_err());
         lease.update(true, &mut interface).await.unwrap();
+        lease.update(true, &mut interface).await.unwrap();
+        assert!(!interface.up);
+        assert!(interface.marker);
+        assert_eq!(interface.changes, vec![true, false, false]);
+        lease.update(false, &mut interface).await.unwrap();
         assert!(interface.up);
         assert!(!interface.marker);
-        assert_eq!(interface.changes, vec![true, false]);
     }
 }

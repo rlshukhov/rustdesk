@@ -22,7 +22,9 @@ Only an initially UP interface is changed. The first matching session pauses it;
 remaining matching sessions keep it paused. The last disconnect, disabling the
 setting, or loss of the user server restores it. An interface initially DOWN is
 left alone, including after the session. If macOS re-enables AWDL during a session,
-RustDesk reports an error and does not keep forcing it DOWN.
+RustDesk reapplies DOWN on the next one-second poll. The original restore marker
+is retained. A real command failure restores UP and blocks further pause attempts
+until the last session ends or the setting is turned off, avoiding a tight retry loop.
 
 A root-owned recovery marker is synced before requesting DOWN. SIGTERM/SIGINT
 restore the interface before daemon exit. After SIGKILL or a crash, launchd's
