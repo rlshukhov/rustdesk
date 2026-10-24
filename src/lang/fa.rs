@@ -819,5 +819,6 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("AWDL could not be paused or restored. See the service log.", ""),
         ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
         ("AWDL is paused for incoming sessions.", ""),
+        ("Use native macOS video capture", ""),
     ].iter().cloned().collect();
 }

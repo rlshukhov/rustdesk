@@ -70,6 +70,7 @@ pub const OPTION_ENABLE_ABR: &str = "enable-abr";
 pub const OPTION_ALLOW_REMOVE_WALLPAPER: &str = "allow-remove-wallpaper";
 pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-render";
 pub const OPTION_ENABLE_HWCODEC: &str = "enable-hwcodec";
+pub const OPTION_MACOS_NATIVE_VIDEO: &str = "allow-macos-native-video";
 pub const OPTION_MACOS_PAUSE_AWDL: &str = "allow-macos-pause-awdl";
 pub const OPTION_MACOS_AWDL_STATUS: &str = "macos-awdl-status";
 pub const OPTION_APPROVE_MODE: &str = "approve-mode";
@@ -331,6 +332,7 @@ pub const KEYS_SETTINGS: &[&str] = &[
     OPTION_ALLOW_INSECURE_TLS_FALLBACK,
     OPTION_KEEP_AWAKE_DURING_INCOMING_SESSIONS,
     OPTION_MACOS_PAUSE_AWDL,
+    OPTION_MACOS_NATIVE_VIDEO,
     OPTION_ALLOW_AUTO_UPDATE,
     OPTION_ALLOW_KCP_CC,
     OPTION_ALLOW_WEBRTC_CC,

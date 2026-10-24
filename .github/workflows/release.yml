@@ -109,7 +109,7 @@ jobs:
             const {data: release} = await github.rest.repos.createRelease({
               ...context.repo, tag_name: tag, name: `RustDesk ${version}`, draft: true,
               prerelease: process.env.PRERELEASE === 'true',
-              body: `macOS ARM64 and Android ARM64 release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nThe Android APK is signed with the repository's Android release key. macOS signing and notarization depend on the configured Apple signing secrets.`,
+              body: `macOS ARM64 and Android ARM64 release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nThe Android APK is signed with the repository's Android release key. macOS signing uses the configured macOS certificate. Notarization is performed only in developer-id mode.`,
             });
             for (const name of [...files, 'SHA256SUMS']) {
               await github.rest.repos.uploadReleaseAsset({

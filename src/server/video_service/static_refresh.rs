@@ -85,6 +85,8 @@ pub(super) struct StaticRefresh<'a> {
     repeat_no_outputs: usize,
     repeat_failures: usize,
     source_ready: bool,
+    #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+    native_frame: Option<scrap::macos_native::PixelBuffer>,
     #[cfg(all(windows, feature = "vram"))]
     has_texture: bool,
 }
@@ -138,12 +140,22 @@ impl<'a> StaticRefresh<'a> {
             repeat_no_outputs: 0,
             repeat_failures: 0,
             source_ready: false,
+            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+            native_frame: None,
             #[cfg(all(windows, feature = "vram"))]
             has_texture: false,
         }
     }
 
     pub(super) fn on_frame(&mut self, _frame: &EncodeInput) {
+        #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+        {
+            self.native_frame = match _frame {
+                EncodeInput::MacPixelBuffer(buffer) => Some((*buffer).clone()),
+                _ => None,
+            };
+        }
+
         self.repeat_output_counter = 0;
         self.repeat_output_limit = 0;
         self.repeat_no_outputs = 0;
@@ -226,6 +238,8 @@ impl<'a> StaticRefresh<'a> {
         } else {
             Some(EncodeInput::YUV(yuv))
         };
+        #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+        let frame = frame.or_else(|| self.native_frame.as_ref().map(EncodeInput::MacPixelBuffer));
         #[cfg(all(windows, feature = "vram"))]
         let frame = frame.or_else(|| self.has_texture.then_some(EncodeInput::Repeat));
         if let Some(frame) = frame {

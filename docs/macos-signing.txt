@@ -1,0 +1,72 @@
+macOS signing and updates
+
+Ad-hoc signatures identify a specific binary rather than a stable signer. Rebuilt
+ad-hoc applications can therefore lose TCC authorizations. Apple describes this
+under "Designated requirement":
+https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements
+
+Use the same certificate/private key and bundle ID for local and GitHub releases.
+The one-time transition from official/ad-hoc signing to a new identity requires
+re-approving permissions. Later versions should satisfy the same designated
+requirement; actual Screen Recording, Accessibility, Input Monitoring and
+Microphone permission retention must still be checked across two installed
+updates on the target macOS. macOS policy prompts can still apply independently.
+No script edits the TCC database or silently grants privacy permissions.
+
+Create a local identity ONCE (macOS, OpenSSL with req -addext):
+  bash res/macos/create-local-signing.sh ../.toolchains/signing/macos-local
+This directory must be outside the checkout and private to its owner. It contains:
+  identity.p12              encrypted certificate/private key, for CI
+  p12-password.txt          its strong generated password
+  certificate.pem          public certificate; safe to share
+  identity-name.txt         plain signing identity name
+  signing.keychain-db       local signing keychain
+  keychain-password.txt     local keychain password; never upload to GitHub
+No private values are printed. The transient unencrypted key is removed. Back up
+the P12 and password separately; regenerating them changes the app identity.
+Do not commit any of these files. The helper refuses to overwrite an identity.
+
+Local signing (after assembling the app and its service binary):
+  sign_dir=/absolute/path/to/private/macos-local
+  security unlock-keychain -p "$(cat "$sign_dir/keychain-password.txt")" "$sign_dir/signing.keychain-db"
+  MACOS_SIGNING_MODE=local MACOS_SIGNING_KEYCHAIN="$sign_dir/signing.keychain-db" \
+    bash .github/scripts/sign-macos-app.sh /path/to/RustDesk.app \
+    'RustDesk Local Signing' flutter/macos/Runner/Release.entitlements
+This signs embedded code first, then the app, and verifies signatures and the
+microphone entitlement. Local mode omits hardened runtime and online timestamps;
+Developer ID mode retains the existing hardened-runtime/timestamp behavior.
+
+GitHub Settings > Secrets and variables > Actions:
+  Variable MACOS_SIGNING_MODE       local
+  Secret MACOS_P12_BASE64           base64 of identity.p12
+  Secret MACOS_P12_PASSWORD         content of p12-password.txt
+  Secret MACOS_CODESIGN_IDENTITY    RustDesk Local Signing (without shell quotes)
+Use `base64 < identity.p12 | tr -d '\n' | pbcopy` locally to copy the P12 Secret.
+The Release workflow uses these settings automatically; Android signing is
+independent. CI imports into a temporary keychain with its own random password,
+signs the app and final DMG, and deletes the keychain at job end. Missing P12 in
+local mode fails early. No notarization tools or Apple API key are needed.
+For Apple's certificate use MACOS_SIGNING_MODE=developer-id (the default), the
+same three signing Secrets, and MACOS_NOTARIZE_JSON as before.
+
+A self-signed certificate does not replace Developer ID or notarization for
+Gatekeeper/public distribution. On your own Mac, import certificate.pem into
+Keychain Access and trust it for Code Signing if required, then approve the app's
+first launch in Privacy & Security. This does not itself grant TCC permissions.
+Use the same installed path /Applications/RustDesk.app on every update. Run the
+installed copy, not a second copy from the mounted DMG.
+
+The launchd jobs point to binaries inside /Applications/RustDesk.app; the service
+is not a separately copied binary. Replacing the app normally needs a service
+restart, not uninstall/reinstall. After closing/replacing the app:
+  sudo launchctl kickstart -k system/com.carriez.RustDesk_service
+Restart the user server/app as well. If the jobs were never installed, were
+removed, or the service plist changes, install/update the service through the
+app once. Signing alone does not restart already running binaries.
+
+Regression surface
+Only signing/import/release packaging scripts change, plus the macOS reusable
+workflow's signing conditions and an explicit scrap test invocation. Local mode
+is opt-in; no certificate keeps the existing unsigned release behavior. The
+Developer ID notarization path remains available. No app privilege checks or
+service installation code were changed to bypass prompts.

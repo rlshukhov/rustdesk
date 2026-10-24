@@ -769,7 +769,10 @@ class _GeneralState extends State<_General> {
               bind.mainCheckHwcodec();
             }
           },
-        )
+        ),
+        if (isMacOS)
+          _OptionCheckBox(context, 'Use native macOS video capture',
+              kOptionMacosNativeVideo, reverse: false),
       ]),
     );
   }

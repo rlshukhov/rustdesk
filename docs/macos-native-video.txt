@@ -1,0 +1,52 @@
+Native macOS video
+
+Requires the screencapturekit Cargo feature and macOS 12.3+. The ARM64 release
+already enables this feature and minimum OS version. In Settings > Display >
+Hardware Codec, enable "Use native macOS video capture", keep hardware codecs
+on, then reconnect. The option defaults to off and affects incoming monitor
+sessions using negotiated H264/HEVC 4:2:0. Camera capture and software codecs
+retain their existing paths. Intel releases without this feature use legacy
+capture even if a copied configuration contains the option.
+
+Path: ScreenCaptureKit -> NV12 CVPixelBuffer -> hardware-only VideoToolbox ->
+Annex-B H264/HEVC -> existing RustDesk transport. No CPU mapping/copying or
+BGRA/YUV conversion of the uncompressed streaming frames. Compressed packets
+are copied into the existing protocol. Screenshots map/convert one buffer on
+request, outside the streaming path. Cursor rendering stays separate.
+
+ScreenCaptureKit captures at up to 60 FPS; the existing video QoS loop can consume
+less. Its system queue depth is three, and the application retains one latest
+pending surface. The encoder has one in-flight frame, no frame reordering, and
+flushes it before returning. Encoded interdependent frames are not discarded.
+Static refresh retains one last surface and re-encodes it through the existing
+refresh policy. Bitrate/quality changes and recording use the existing protocol.
+
+Startup creates both new components before replacing either legacy component.
+Any startup error keeps the legacy pair. A runtime capture/encode error uses the
+existing service restart mechanism and falls back to the legacy pair. Native
+video is disabled for the remainder of that host process after an error to avoid
+restart loops; restart RustDesk's user server to retry. No process-wide hardware
+codec configuration is removed. A missing first captured frame fails after five
+seconds; startup framework queries each have a five-second timeout.
+
+Validation
+  cargo check --locked --lib --features flutter,hwcodec,unix-file-copy-paste,screencapturekit
+  cargo test --locked -p scrap --features screencapturekit macos_native
+  cargo test --locked -p scrap --features screencapturekit macos_native -- --include-ignored
+The ignored test needs a physical Mac with hardware H264 and HEVC encoders. It
+feeds NV12 surfaces through both encoders, checks keyframe/Annex-B packet output,
+updates bitrate, and converts a screenshot. It needs no screen-recording grant.
+Full capture, visual correctness, reconnect/rotation/resolution handling, and the
+before/after CPU/FPS comparison still require an installed app and a peer.
+No claim of stable 60 displayed FPS is made from the encoder-only smoke test.
+
+Regression surface
+- Cargo feature/build files: compile/link the macOS-only Objective-C bridge.
+- libs/scrap/src/common/mod.rs: a macOS-feature-gated owned CVPixelBuffer frame
+  and borrowed encoder input; no shared trait signatures change.
+- src/server/video_service.rs: one macOS-only activation hook after the existing
+  encoder setup, plus conversion of native screenshot buffers.
+- src/server/video_service/static_refresh.rs: retain one native surface for the
+  existing static refresh loop. Legacy YUV/Windows texture behavior is unchanged.
+- Configuration/UI/language maps: one default-off setting beside hardware codecs.
+- AWDL's previously tested re-enable correction is independent of video capture.

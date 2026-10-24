@@ -39,6 +39,8 @@ cfg_if! {
 }
 
 pub mod codec;
+#[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+pub mod macos_native;
 pub mod convert;
 #[cfg(feature = "hwcodec")]
 pub mod hwcodec;
@@ -178,6 +180,8 @@ pub trait TraitPixelBuffer {
 #[cfg(not(any(target_os = "ios")))]
 pub enum Frame<'a> {
     PixelBuffer(PixelBuffer<'a>),
+    #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+    MacPixelBuffer(macos_native::PixelBuffer),
     Texture((*mut c_void, usize)),
 }
 
@@ -185,6 +189,8 @@ pub enum Frame<'a> {
 impl Frame<'_> {
     pub fn valid<'a>(&'a self) -> bool {
         match self {
+            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+            Frame::MacPixelBuffer(_) => true,
             Frame::PixelBuffer(pixelbuffer) => !pixelbuffer.data().is_empty(),
             Frame::Texture((texture, _)) => !texture.is_null(),
         }
@@ -197,6 +203,8 @@ impl Frame<'_> {
         mid_data: &mut Vec<u8>,
     ) -> ResultType<EncodeInput<'a>> {
         match self {
+            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+            Frame::MacPixelBuffer(buffer) => Ok(EncodeInput::MacPixelBuffer(buffer)),
             Frame::PixelBuffer(pixelbuffer) => {
                 convert_to_yuv(&pixelbuffer, yuvfmt, yuv, mid_data)?;
                 Ok(EncodeInput::YUV(yuv))
@@ -208,6 +216,8 @@ impl Frame<'_> {
 
 pub enum EncodeInput<'a> {
     YUV(&'a [u8]),
+    #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+    MacPixelBuffer(&'a macos_native::PixelBuffer),
     Texture((*mut c_void, usize)),
     #[cfg(all(windows, feature = "vram"))]
     Repeat,
