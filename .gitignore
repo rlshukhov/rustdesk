@@ -1,6 +1,7 @@
 /build
 /target
 /.toolchains/
+/res/dev/
 .vscode
 .idea
 .DS_Store

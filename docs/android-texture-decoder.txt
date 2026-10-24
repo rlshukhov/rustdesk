@@ -1,0 +1,46 @@
+Android hardware decoding to Flutter textures
+
+Android 10 / API 29 and later can decode H.264 and HEVC with a hardware-only
+MediaCodec and render directly to a Flutter SurfaceTexture. Decoded pixels
+are not converted to RGBA on the CPU. The existing Hardware Codec preference
+controls this path and is read when a session starts; reconnect after changing it.
+ANDROID_TEXTURE_DECODER=false is an optional build-time troubleshooting override.
+
+Unsupported Android versions/codecs, session recording, and reported decoder
+failures use the existing software path. A decoder failure requests a key frame
+before software decoding resumes. HDR and 4:4:4 hardware output are not supported.
+
+The input queue holds at most four compressed access units. Brief congestion
+waits on the submitting Rust thread, leaving the MediaCodec handler free.
+Surface delivery waits for Flutter to consume the previous image. At most two
+decoded images wait for delivery; overload discards old decoded images, never
+compressed reference frames. Stream reset clears indices owned by the old codec.
+
+The Android quality monitor reports the active path, codec name, input/decode/
+texture FPS, queue depths and fallback reason. Texture FPS counts images consumed
+by Flutter, not physical display refreshes. Sampling uses the existing quality
+status tick while the monitor is visible. Periodic logging is disabled by default:
+  adb shell setprop log.tag.RustDeskTextureStats DEBUG
+  adb logcat -s RustDeskTextureStats:D
+Disable it with:
+  adb shell setprop log.tag.RustDeskTextureStats INFO
+Enabled logging is limited to one snapshot per second and creates no separate file.
+
+Tests: flutter/test/android_texture_test.dart and Android JUnit tests for AnnexB
+parameter sets and SurfaceFrameQueue. The Android aarch64 CI runs the JUnit tests.
+Rotation/Fold transitions, battery life and other device/codec combinations need
+additional device coverage; short FPS measurements do not validate those cases.
+
+Regression surface
+- MainActivity.kt: attach/detach the Android module with the Flutter engine.
+- ffi.kt: additional JNI entry points; existing entry points are unchanged.
+- src/client.rs: Android/Flutter-only decoder creation, frame and reset hooks.
+- src/client/io_loop.rs: pass SwitchDisplay geometry to the Android decoder.
+- models/model.dart: create/close the texture, honour Hardware Codec, allow
+  image gestures and preserve canvas configuration without a CPU ui.Image.
+- mobile/pages/remote_page.dart: draw Texture only when native output is ready,
+  using the existing canvas offset/scale; otherwise keep CustomPaint.
+- common/widgets/overlay.dart: Android-only decoder metrics and panel width.
+- app/build.gradle: JUnit test dependency; application identity/signing unchanged.
+- flutter-build.yml: JUnit execution in the Android aarch64 CI job.
+Other platforms, the remote host and the wire protocol are unchanged.

@@ -32,8 +32,6 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
-def textureDev = providers.gradleProperty('rustdeskTextureDev').orNull == 'true'
-
 // Add rustls-platform-verifier Android support
 String findRustlsPlatformVerifierMavenDir() {
     def dependencyText = providers.exec {
@@ -106,11 +104,6 @@ android {
         targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        manifestPlaceholders.applicationLabel = textureDev ? "RustDesk Texture Dev" : "RustDesk"
-        if (textureDev) {
-            applicationIdSuffix ".texturedev"
-            versionNameSuffix "-texture-dev"
-        }
     }
 
     signingConfigs {
@@ -126,7 +119,7 @@ android {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig textureDev ? signingConfigs.debug : signingConfigs.release
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules'
         }
     }
