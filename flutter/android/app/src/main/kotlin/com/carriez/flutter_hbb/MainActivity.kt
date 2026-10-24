@@ -56,6 +56,7 @@ class MainActivity : FlutterActivity() {
     private val channelTag = "mChannel"
     private val logTag = "mMainActivity"
     private var mainService: MainService? = null
+    private var androidTextureDecoder: AndroidTextureDecoder? = null
     private sealed class PendingPicker {
         data class ImportFiles(val result: MethodChannel.Result) : PendingPicker()
         data class ExportFile(val source: File, val result: MethodChannel.Result) : PendingPicker()
@@ -79,6 +80,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        androidTextureDecoder = AndroidTextureDecoder(flutterEngine)
         if (MainService.isReady) {
             Intent(activity, MainService::class.java).also {
                 bindService(it, serviceConnection, Context.BIND_AUTO_CREATE)
@@ -107,6 +109,12 @@ class MainActivity : FlutterActivity() {
                 mapOf("name" to "input", "value" to inputPer.toString())
             )
         }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        androidTextureDecoder?.close()
+        androidTextureDecoder = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

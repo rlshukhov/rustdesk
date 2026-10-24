@@ -28,4 +28,8 @@ object FFI {
     external fun getBuildinOption(key: String): String
     external fun onClipboardUpdate(clips: ByteBuffer)
     external fun isServiceClipboardEnabled(): Boolean
+    external fun registerAndroidTexture(session: String, decoder: Any?): Boolean
+    external fun onAndroidTextureFrame(session: String)
+    external fun onAndroidTextureError(session: String)
+    external fun androidVideoQueueSize(session: String): Int
 }

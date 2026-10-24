@@ -42,6 +42,7 @@ import '../common.dart';
 import '../utils/image.dart' as img;
 import '../common/widgets/dialog.dart';
 import 'input_model.dart';
+import 'android_texture.dart';
 import 'platform_model.dart';
 import 'package:flutter_hbb/utils/scale.dart';
 
@@ -1915,6 +1916,32 @@ class VirtualMouseMode with ChangeNotifier {
 }
 
 class ImageModel with ChangeNotifier {
+  AndroidTextureController? androidTexture;
+  bool get hasImage => _image != null || androidTexture?.ready == true;
+
+  Future<void> startAndroidTexture() async {
+    if (!isAndroid || !AndroidTextureController.enabled) return;
+    await closeAndroidTexture();
+    if (!await mainGetBoolOption(kOptionEnableHwcodec)) return;
+    if (parent.target?.closed != false) return;
+    final controller = AndroidTextureController(sessionId.toString(),
+        onReady: () async {
+          final ffi = parent.target;
+          if (ffi == null || ffi.closed) return;
+          if (_image == null) await initializeCursorAndCanvas(ffi);
+          await ffi.onEvent2UIRgba();
+        },
+        onChanged: notifyListeners);
+    androidTexture = controller;
+    await controller.start();
+  }
+
+  Future<void> closeAndroidTexture() async {
+    final controller = androidTexture;
+    androidTexture = null;
+    await controller?.close();
+  }
+
   ui.Image? _image;
 
   ui.Image? get image => _image;
@@ -2021,6 +2048,11 @@ class ImageModel with ChangeNotifier {
 
   // mobile only
   double get maxScale {
+    final texture = androidTexture;
+    if (texture?.ready == true) {
+      final size = parent.target!.canvasModel.getSize();
+      return max(1.5, max(size.width / texture!.width, size.height / texture.height));
+    }
     if (_image == null) return 1.5;
     final size = parent.target!.canvasModel.getSize();
     final xscale = size.width / _image!.width;
@@ -2030,6 +2062,11 @@ class ImageModel with ChangeNotifier {
 
   // mobile only
   double get minScale {
+    final texture = androidTexture;
+    if (texture?.ready == true) {
+      final size = parent.target!.canvasModel.getSize();
+      return min(size.width / texture!.width, size.height / texture.height) / 1.5;
+    }
     if (_image == null) return 1.5;
     final size = parent.target!.canvasModel.getSize();
     final xscale = size.width / _image!.width;
@@ -2734,7 +2771,7 @@ class CanvasModel with ChangeNotifier {
 
   // mobile only
   updateScale(double v, Offset focalPoint) {
-    if (parent.target?.imageModel.image == null) return;
+    if (parent.target?.imageModel.hasImage != true) return;
     final s = _scale;
     _scale *= v;
     final maxs = parent.target?.imageModel.maxScale ?? 1;
@@ -3365,7 +3402,7 @@ class CursorModel with ChangeNotifier {
     }
     double dx = delta.dx;
     double dy = delta.dy;
-    if (parent.target?.imageModel.image == null) return;
+    if (parent.target?.imageModel.hasImage != true) return;
     final scale = parent.target?.canvasModel.scale ?? 1.0;
     dx /= scale;
     dy /= scale;
@@ -4187,6 +4224,9 @@ class FFI {
       }
       ffiModel.pi.currentDisplay = display;
     }
+    if (isAndroid && connType == ConnType.defaultConn) {
+      unawaited(imageModel.startAndroidTexture());
+    }
     if (isDesktop && connType == ConnType.defaultConn) {
       textureModel.updateCurrentDisplay(display ?? 0);
     }
@@ -4383,7 +4423,7 @@ class FFI {
       model.dispose();
     }
     _terminalModels.clear();
-    if (imageModel.image != null && !isWebDesktop) {
+    if (imageModel.hasImage && !isWebDesktop) {
       await setCanvasConfig(
           sessionId,
           cursorModel.x,
@@ -4392,6 +4432,9 @@ class FFI {
           canvasModel.y,
           canvasModel.scale,
           ffiModel.pi.currentDisplay);
+    }
+    if (isAndroid && AndroidTextureController.enabled) {
+      await imageModel.closeAndroidTexture();
     }
     imageModel.callbacksOnFirstImage.clear();
     shortcutModel.clear();

@@ -104,6 +104,8 @@ pub mod file_trait;
 pub mod helper;
 pub mod io_loop;
 pub mod screenshot;
+#[cfg(all(target_os = "android", feature = "flutter"))]
+mod android_texture;
 
 pub const MILLI1: Duration = Duration::from_millis(1);
 pub const SEC30: Duration = Duration::from_secs(30);
@@ -4002,6 +4004,9 @@ pub fn start_video_thread<F, T>(
         let mut count = 0;
         let mut duration = std::time::Duration::ZERO;
         let mut skip_beginning = 0;
+        #[cfg(all(target_os = "android", feature = "flutter"))]
+        let mut android_texture =
+            android_texture::Decoder::new(&session.lc, display, Arc::downgrade(&video_queue));
         loop {
             if let Ok(data) = video_receiver.recv() {
                 match data {
@@ -4027,6 +4032,10 @@ pub fn start_video_thread<F, T>(
                             }
                         };
                         let display = vf.display as usize;
+                        #[cfg(all(target_os = "android", feature = "flutter"))]
+                        if android_texture.handle(&vf, &session, &mut video_callback, &fps, &chroma) {
+                            continue;
+                        }
                         let start = std::time::Instant::now();
                         let format = CodecFormat::from(&vf);
                         if video_handler.is_none() {
@@ -4109,6 +4118,8 @@ pub fn start_video_thread<F, T>(
                         }
                     }
                     MediaData::Reset => {
+                        #[cfg(all(target_os = "android", feature = "flutter"))]
+                        android_texture.reset();
                         if let Some(handler) = video_handler.as_mut() {
                             handler.reset(None);
                         }

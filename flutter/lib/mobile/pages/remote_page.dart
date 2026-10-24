@@ -19,6 +19,7 @@ import '../../common/widgets/overlay.dart';
 import '../../common/widgets/dialog.dart';
 import '../../common/widgets/remote_input.dart';
 import '../../models/input_model.dart';
+import '../../models/android_texture.dart';
 import '../../models/model.dart';
 import '../../models/platform_model.dart';
 import '../../models/shortcut_model.dart';
@@ -1217,6 +1218,11 @@ class ImagePaint extends StatelessWidget {
       }
     }
     final adjust = c.getAdjustY();
+    final texture = m.androidTexture;
+    if (texture?.ready == true && texture?.textureId != null) {
+      return AndroidTextureView(
+          controller: texture!, offset: Offset(c.x, c.y + adjust), scale: s);
+    }
     return CustomPaint(
       painter: ImagePainter(
           image: m.image, x: c.x / s, y: (c.y + adjust) / s, scale: s),

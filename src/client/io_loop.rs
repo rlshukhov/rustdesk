@@ -2138,6 +2138,8 @@ impl<T: InvokeUiSession> Remote<T> {
                         }
                     }
                     Some(misc::Union::SwitchDisplay(s)) => {
+                        #[cfg(all(target_os = "android", feature = "flutter"))]
+                        super::android_texture::switch_display(&self.handler.lc, &s);
                         self.handler.handle_peer_switch_display(&s);
                         if let Some(thread) = self.video_threads.get_mut(&(s.display as usize)) {
                             thread.video_sender.send(MediaData::Reset).ok();

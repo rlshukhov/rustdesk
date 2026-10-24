@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 
 import '../../consts.dart';
 import '../../desktop/widgets/tabbar_widget.dart';
+import '../../models/android_texture.dart';
 import '../../models/chat_model.dart';
 import '../../models/model.dart';
 import 'chat_page.dart';
@@ -588,7 +589,7 @@ class QualityMonitor extends StatelessWidget {
           builder: (context, qualityMonitorModel, child) => qualityMonitorModel
                   .show
               ? Container(
-                  constraints: BoxConstraints(maxWidth: 200),
+                  constraints: BoxConstraints(maxWidth: isAndroid ? 280 : 200),
                   padding: const EdgeInsets.all(8),
                   color: MyTheme.canvasColor.withAlpha(150),
                   child: Column(
@@ -606,6 +607,15 @@ class QualityMonitor extends StatelessWidget {
                       _row(
                           "Codec", qualityMonitorModel.data.codecFormat ?? '-'),
                       _row("Chroma", qualityMonitorModel.data.chroma ?? '-'),
+                      if (isAndroid)
+                        AndroidDecoderMonitor(
+                          controller: qualityMonitorModel.parent.target
+                              ?.imageModel.androidTexture,
+                          hasImage: qualityMonitorModel.parent.target
+                                  ?.imageModel.hasImage ==
+                              true,
+                          rowBuilder: _row,
+                        ),
                       if (qualityMonitorModel.webrtcTransport != null)
                         _row("Transport",
                             qualityMonitorModel.webrtcTransport!),
