@@ -815,5 +815,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Off", "Uit"),
         ("api_server_connection_tip", ""),
         ("api_server_empty_tip", ""),
+        ("Pause AWDL during incoming sessions", ""),
+        ("Temporarily disables AirDrop and Continuity. AWDL is restored when the last session ends.", ""),
+        ("Install or update the RustDesk service to use this option.", ""),
+        ("AWDL could not be paused or restored. See the service log.", ""),
+        ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
+        ("AWDL is paused for incoming sessions.", ""),
     ].iter().cloned().collect();
 }

@@ -597,6 +597,10 @@ fn legacy_hot_measured() -> bool {
 #[tokio::main(flavor = "current_thread")]
 pub async fn start(postfix: &str) -> ResultType<()> {
     let mut incoming = new_listener(postfix).await?;
+    #[cfg(all(target_os = "macos", feature = "flutter"))]
+    if postfix == crate::POSTFIX_SERVICE {
+        crate::platform::macos::awdl::start();
+    }
     loop {
         if let Some(result) = incoming.next().await {
             match result {

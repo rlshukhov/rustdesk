@@ -1,0 +1,61 @@
+Session-scoped AWDL pause (macOS Flutter host)
+
+Security settings expose "Pause AWDL during incoming sessions". The option
+allow-macos-pause-awdl is off by default. AirDrop and Continuity are temporarily
+unavailable while the interface is paused. The UI requires a running service
+that supports this feature; otherwise it explains that the service needs to be
+installed or updated. The app bundle and root service must be upgraded together.
+
+The existing root service polls authenticated user --server IPC on a one-second interval
+with a three-second bound on each polling cycle.
+For each logged-in user it reads the existing Options and VideoConnCount queries.
+A user must opt in and have an authorized Remote connection. File transfer,
+terminal, camera, tunnels and unauthenticated connections do not enable this mode.
+The protected _service IPC still accepts SyncConfig only; no command RPC is added.
+
+The controller issues only /sbin/ifconfig awdl0 down or up, with fixed arguments,
+no shell, a clean environment and a two-second command timeout. Interface flags
+are read through getifaddrs. IPC requests and user enumeration run independently
+of the video producer. Missing/unresponsive user processes release the mode.
+
+Only an initially UP interface is changed. The first matching session pauses it;
+remaining matching sessions keep it paused. The last disconnect, disabling the
+setting, or loss of the user server restores it. An interface initially DOWN is
+left alone, including after the session. If macOS re-enables AWDL during a session,
+RustDesk reports an error and does not keep forcing it DOWN.
+
+A root-owned recovery marker is synced before requesting DOWN. SIGTERM/SIGINT
+restore the interface before daemon exit. After SIGKILL or a crash, launchd's
+existing KeepAlive restarts the daemon, which processes its recovery marker before
+requesting another pause. Recovery after a crash requires the daemon to restart;
+a simultaneous forced kill and removal of its launchd job cannot be recovered by
+a process that no longer exists. If ifconfig cannot restore the interface, an
+error is logged and the marker remains for the next service start. Manual recovery:
+  sudo /sbin/ifconfig awdl0 up
+
+Files live in /var/run/APPNAME-awdl, a validated root-owned directory. The recovery
+marker and controller lock are private to root. A non-sensitive status file is
+read-only to users and includes the daemon PID. Settings show ready/paused,
+originally disabled, unavailable or an error; errors go to the service log with
+rate limiting. PID reuse can make an old status look current until the next daemon
+start; this only affects the indicator, not permission to change the interface.
+
+Implementation validation
+- Native cargo check --locked --lib --features flutter on macOS ARM64.
+- Three Rust tests in platform::macos::awdl::lease::tests exercise multiple
+  sessions, original DOWN, disabling/lost server, recovery and external changes.
+- Dart analysis of the settings page.
+Physical verification still requires installing the new app and service, enabling
+the option and testing real incoming sessions, daemon restart and restoration.
+Before Wi-Fi frame-timing measurements, explicitly make the test animation visible.
+
+Regression surface
+- platform/macos.rs: macOS Flutter feature module declaration.
+- ipc.rs: start the controller only in the root _service listener's existing runtime.
+- ui_interface.rs: macOS-only virtual status option; other option reads unchanged.
+- base/config/keys.rs and Flutter consts: the opt-in setting and read-only status key.
+- desktop_setting_page.dart: macOS-only setting, explanation and status display.
+- language maps: six new keys; Russian translations, blanks in other languages.
+The capture backend, encoders, Android, other desktop platforms and wire protocol
+are unchanged. ScreenCaptureKit / direct VideoToolbox is a separate next stage;
+the existing screencapturekit Cargo feature enables audio, not screen capture.
