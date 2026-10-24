@@ -815,5 +815,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Off", ""),
         ("api_server_connection_tip", "自訂伺服器正在使用未加密的 HTTP。請聯絡管理員啟用 HTTPS。"),
         ("api_server_empty_tip", "API 伺服器留空時，自訂伺服器預設使用 HTTP。請聯絡管理員啟用 HTTPS。"),
+        ("Pause AWDL during incoming sessions", ""),
+        ("Temporarily disables AirDrop and Continuity. AWDL is restored when the last session ends.", ""),
+        ("Install or update the RustDesk service to use this option.", ""),
+        ("AWDL could not be paused or restored. See the service log.", ""),
+        ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
+        ("AWDL is paused for incoming sessions.", ""),
+        ("Use native macOS video capture", ""),
     ].iter().cloned().collect();
 }

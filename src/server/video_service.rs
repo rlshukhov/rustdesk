@@ -1,3 +1,5 @@
+#[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+mod macos_native;
 // 24FPS (actually 23.976FPS) is what video professionals ages ago determined to be the
 // slowest playback rate that still looks smooth enough to feel real.
 // Our eyes can see a slight difference and even though 30FPS actually shows
@@ -690,6 +692,8 @@ fn run(vs: VideoService) -> ResultType<()> {
             )?
         }
     };
+    #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+    macos_native::try_enable(&mut c, &mut encoder, &encoder_cfg, vs.source);
     #[cfg(feature = "vram")]
     c.set_output_texture(encoder.input_texture());
     #[cfg(target_os = "android")]
@@ -834,6 +838,11 @@ fn run(vs: VideoService) -> ResultType<()> {
                                     );
                                     (format!("Convert pixfmt: {}", serr), 0, 0, vec![])
                                 }
+                            },
+                            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+                            scrap::Frame::MacPixelBuffer(f) => match f.rgba() {
+                                Ok((w, h, rgba)) => (String::new(), w, h, rgba),
+                                Err(error) => (error.to_string(), 0, 0, vec![]),
                             },
                             scrap::Frame::Texture(_) => {
                                 if restore_vram {
@@ -1315,6 +1324,13 @@ fn handle_one_frame(
             send_conn_ids = sp.send_video_frame(msg);
         }
         Err(e) => {
+            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+            if e.is::<scrap::macos_native::Pending>() {
+                return Ok(static_refresh::FrameEncodeResult {
+                    send_conn_ids,
+                    vpx_no_output,
+                });
+            }
             vpx_no_output = e.is::<scrap::VpxNoOutput>();
             *encode_fail_counter += 1;
             // Encoding errors are not frequent except on Android

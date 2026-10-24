@@ -769,7 +769,10 @@ class _GeneralState extends State<_General> {
               bind.mainCheckHwcodec();
             }
           },
-        )
+        ),
+        if (isMacOS)
+          _OptionCheckBox(context, 'Use native macOS video capture',
+              kOptionMacosNativeVideo, reverse: false),
       ]),
     );
   }
@@ -1443,6 +1446,7 @@ class _SafetyState extends State<_Safety> with AutomaticKeepAliveClientMixin {
       _OptionCheckBox(context, 'keep-awake-during-incoming-sessions-label',
           kOptionKeepAwakeDuringIncomingSessions,
           reverse: false, enabled: enabled),
+      if (isMacOS) _MacosAwdlSetting(enabled: enabled),
       if (bind.mainIsInstalled())
         _OptionCheckBox(context, 'allow-only-conn-window-open-tip',
             'allow-only-conn-window-open',
@@ -2684,6 +2688,72 @@ Widget _Card(
       ),
     ],
   );
+}
+
+class _MacosAwdlSetting extends StatefulWidget {
+  final bool enabled;
+
+  const _MacosAwdlSetting({required this.enabled});
+
+  @override
+  State<_MacosAwdlSetting> createState() => _MacosAwdlSettingState();
+}
+
+class _MacosAwdlSettingState extends State<_MacosAwdlSetting> {
+  Timer? _timer;
+  String _status = 'unavailable';
+
+  @override
+  void initState() {
+    super.initState();
+    _status = bind.mainGetOptionSync(key: kOptionMacosAwdlStatus);
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) {
+      final status = bind.mainGetOptionSync(key: kOptionMacosAwdlStatus);
+      if (mounted && status != _status) setState(() => _status = status);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final available = _status != 'unavailable' && _status.isNotEmpty;
+    final statusText = {
+      'unavailable': 'Install or update the RustDesk service to use this option.',
+      'error': 'AWDL could not be paused or restored. See the service log.',
+      'already-down': 'AWDL was already disabled; RustDesk will leave it unchanged.',
+      'paused': 'AWDL is paused for incoming sessions.',
+    }[_status];
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _OptionCheckBox(context, 'Pause AWDL during incoming sessions',
+          kOptionMacosPauseAwdl,
+          update: (_) {
+            if (mounted) setState(() {});
+          },
+          enabled: widget.enabled &&
+              (available || mainGetBoolOptionSync(kOptionMacosPauseAwdl))),
+      Padding(
+        padding: const EdgeInsets.only(left: _kCheckBoxLeftMargin + 40, bottom: 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(translate(
+              'Temporarily disables AirDrop and Continuity. AWDL is restored when the last session ends.')),
+          if (statusText != null)
+            Text(translate(statusText),
+                style: _status == 'error'
+                    ? TextStyle(color: Theme.of(context).colorScheme.error)
+                    : null),
+          if (!available)
+            _Button('Install', () {
+              bind.mainIsInstalledDaemon(prompt: true);
+            }, enabled: widget.enabled && bind.mainIsInstalled()),
+        ]),
+      ),
+    ]);
+  }
 }
 
 // ignore: non_constant_identifier_names

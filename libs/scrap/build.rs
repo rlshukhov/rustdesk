@@ -227,6 +227,19 @@ fn ffmpeg() {
 */
 
 fn main() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
+        && env::var_os("CARGO_FEATURE_SCREENCAPTUREKIT").is_some()
+    {
+        cc::Build::new()
+            .file("src/common/macos_native.m")
+            .flag("-fobjc-arc")
+            .flag("-fblocks")
+            .compile("rustdesk_macos_native");
+        println!("cargo:rerun-if-changed=src/common/macos_native.m");
+        for framework in ["Foundation", "ScreenCaptureKit", "CoreMedia", "CoreVideo", "VideoToolbox", "CoreGraphics"] {
+            println!("cargo:rustc-link-lib=framework={framework}");
+        }
+    }
     // in this crate, these are also valid configurations
     println!("cargo:rustc-check-cfg=cfg(dxgi,quartz,x11)");
 

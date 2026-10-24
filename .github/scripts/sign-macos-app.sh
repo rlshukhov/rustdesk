@@ -6,9 +6,17 @@ app_path=$1
 identity=$2
 entitlements=$3
 
-sign_args=(--force --options runtime --sign "$identity")
-if [[ "$identity" != "-" ]]; then
-  sign_args+=(--timestamp)
+sign_args=(--force --sign "$identity")
+case "${MACOS_SIGNING_MODE:-developer-id}" in
+  local) sign_args+=(--timestamp=none) ;;
+  developer-id)
+    sign_args+=(--options runtime)
+    if [[ "$identity" != "-" ]]; then sign_args+=(--timestamp); fi
+    ;;
+  *) echo 'Invalid MACOS_SIGNING_MODE' >&2; exit 1 ;;
+esac
+if [[ -n "${MACOS_SIGNING_KEYCHAIN:-}" ]]; then
+  sign_args+=(--keychain "$MACOS_SIGNING_KEYCHAIN")
 fi
 
 frameworks_path="$app_path/Contents/Frameworks"

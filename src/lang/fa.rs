@@ -813,5 +813,12 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("shortcut-key-not-supported", "این کلید برای میانبر پشتیبانی نمی‌شود."),
         ("On", "روشن"),
         ("Off", "خاموش"),
+        ("Pause AWDL during incoming sessions", ""),
+        ("Temporarily disables AirDrop and Continuity. AWDL is restored when the last session ends.", ""),
+        ("Install or update the RustDesk service to use this option.", ""),
+        ("AWDL could not be paused or restored. See the service log.", ""),
+        ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
+        ("AWDL is paused for incoming sessions.", ""),
+        ("Use native macOS video capture", ""),
     ].iter().cloned().collect();
 }
