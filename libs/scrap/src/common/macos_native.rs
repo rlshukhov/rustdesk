@@ -33,6 +33,7 @@ extern "C" {
         bytes: *mut *const u8,
         length: *mut usize,
         key: *mut bool,
+        pts: *mut i64,
     ) -> i32;
     fn rd_vt_quality(encoder: *mut c_void, kbps: u32) -> i32;
     fn rd_vt_free(encoder: *mut c_void);
@@ -152,6 +153,16 @@ impl Drop for Capturer {
     }
 }
 
+#[derive(Debug)]
+pub struct Pending;
+
+impl std::fmt::Display for Pending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Native VideoToolbox frame pending")
+    }
+}
+impl std::error::Error for Pending {}
+
 pub struct Encoder {
     inner: NonNull<c_void>,
     config: HwRamEncoderConfig,
@@ -196,32 +207,45 @@ impl EncoderApi for Encoder {
             EncodeInput::MacPixelBuffer(buffer) => buffer,
             _ => bail!("Native VideoToolbox requires a CVPixelBuffer"),
         };
-        let mut data = std::ptr::null();
-        let mut length = 0;
-        let mut key = false;
-        let status = unsafe {
-            rd_vt_encode(
-                self.inner.as_ptr(),
-                buffer.inner.as_ptr(),
-                ms,
-                &mut data,
-                &mut length,
-                &mut key,
-            )
-        };
-        if status != 0 || data.is_null() || length == 0 {
-            bail!("Native VideoToolbox encode failed: {status}");
-        }
-        // The compressed packet is copied; the uncompressed surface never crosses CPU memory.
-        let bytes = Bytes::copy_from_slice(unsafe { std::slice::from_raw_parts(data, length) });
-        let frames = EncodedVideoFrames {
-            frames: vec![EncodedVideoFrame {
+        let mut frames = Vec::new();
+        let mut input = buffer.inner.as_ptr();
+        loop {
+            let mut data = std::ptr::null();
+            let mut length = 0;
+            let mut key = false;
+            let mut pts = 0;
+            let status = unsafe {
+                rd_vt_encode(
+                    self.inner.as_ptr(),
+                    input,
+                    ms,
+                    &mut data,
+                    &mut length,
+                    &mut key,
+                    &mut pts,
+                )
+            };
+            if status == 1 {
+                break;
+            }
+            if status != 0 || data.is_null() || length == 0 {
+                bail!("Native VideoToolbox encode failed: {status}");
+            }
+            // Copy each compressed packet before the next drain releases its backing storage.
+            let bytes = Bytes::copy_from_slice(unsafe { std::slice::from_raw_parts(data, length) });
+            frames.push(EncodedVideoFrame {
                 data: bytes,
-                pts: ms,
+                pts,
                 key,
                 ..Default::default()
-            }]
-            .into(),
+            });
+            input = std::ptr::null_mut();
+        }
+        if frames.is_empty() {
+            return Err(Pending.into());
+        }
+        let frames = EncodedVideoFrames {
+            frames: frames.into(),
             ..Default::default()
         };
         let mut message = VideoFrame::new();
@@ -360,21 +384,59 @@ mod tests {
                 keyframe_interval: Some(60),
             });
             let mut encoder = Encoder::new(cfg, false).unwrap();
-            for index in 0..3 {
-                let message = encoder
-                    .encode_to_message(EncodeInput::MacPixelBuffer(&buffer), index * 17)
-                    .unwrap();
+            let mut received = 0;
+            for index in 0..12 {
+                let result =
+                    encoder.encode_to_message(EncodeInput::MacPixelBuffer(&buffer), index * 17);
+                if result
+                    .as_ref()
+                    .err()
+                    .map(|e| e.is::<Pending>())
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
+                let message =
+                    result.unwrap_or_else(|error| panic!("{}, frame {}: {:?}", name, index, error));
                 let frames = if name.starts_with("h264") {
                     &message.h264s().frames
                 } else {
                     &message.h265s().frames
                 };
-                assert_eq!(frames.len(), 1);
-                assert!(frames[0].data.starts_with(&[0, 0, 0, 1]));
-                assert_eq!(frames[0].key, index == 0);
-                assert_eq!(frames[0].pts, index * 17);
+                assert!(!frames.is_empty());
+                for frame in frames {
+                    assert!(frame.data.starts_with(&[0, 0, 0, 1]));
+                    assert_eq!(frame.key, received == 0);
+                    assert_eq!(frame.pts, received * 17);
+                    received += 1;
+                }
                 encoder.set_quality(0.5).unwrap();
             }
+            // The remaining submitted frames can be retrieved without feeding duplicates.
+            std::thread::sleep(Duration::from_millis(100));
+            loop {
+                let (mut data, mut length, mut key, mut pts) = (std::ptr::null(), 0, false, 0);
+                let status = unsafe {
+                    rd_vt_encode(
+                        encoder.inner.as_ptr(),
+                        std::ptr::null_mut(),
+                        0,
+                        &mut data,
+                        &mut length,
+                        &mut key,
+                        &mut pts,
+                    )
+                };
+                if status == 1 {
+                    break;
+                }
+                assert_eq!(status, 0, "{} drain failed", name);
+                assert!(!data.is_null() && length > 0);
+                assert_eq!(pts, received * 17);
+                received += 1;
+                assert!(received <= 12);
+            }
+            assert_eq!(received, 12, "{} lost submitted frames", name);
         }
         let (_, _, rgba) = buffer.rgba().unwrap();
         assert_eq!(rgba.len(), 640 * 480 * 4);

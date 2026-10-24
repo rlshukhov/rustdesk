@@ -1324,6 +1324,13 @@ fn handle_one_frame(
             send_conn_ids = sp.send_video_frame(msg);
         }
         Err(e) => {
+            #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+            if e.is::<scrap::macos_native::Pending>() {
+                return Ok(static_refresh::FrameEncodeResult {
+                    send_conn_ids,
+                    vpx_no_output,
+                });
+            }
             vpx_no_output = e.is::<scrap::VpxNoOutput>();
             *encode_fail_counter += 1;
             // Encoding errors are not frequent except on Android

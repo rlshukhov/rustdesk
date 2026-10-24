@@ -57,7 +57,8 @@ void *rd_sck_start(uint32_t displayID, uint32_t width, uint32_t height) {
             config.height = height;
             config.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange;
             config.minimumFrameInterval = CMTimeMake(1, 60);
-            config.queueDepth = 3;
+            // The encoder and static refresh retain surfaces beyond the capture callback.
+            config.queueDepth = 8;
             config.showsCursor = NO;
             config.colorSpaceName = kCGColorSpaceSRGB;
             capture.stream = [[SCStream alloc] initWithFilter:filter configuration:config delegate:capture];
@@ -120,12 +121,27 @@ int rd_cv_rgba(CVPixelBufferRef buffer, uint8_t *bytes, size_t width, size_t hei
     return 0;
 }
 
-@interface RDEncoder : NSObject
-@property(nonatomic) VTCompressionSessionRef session;
+@interface RDEncodedFrame : NSObject
 @property(nonatomic, strong) dispatch_semaphore_t ready;
 @property(nonatomic, strong) NSData *packet;
 @property(nonatomic) OSStatus status;
 @property(nonatomic) BOOL key;
+@property(nonatomic) int64_t pts;
+@end
+@implementation RDEncodedFrame
+- (instancetype)init {
+    self = [super init];
+    if (self) _ready = dispatch_semaphore_create(0);
+    return self;
+}
+@end
+
+@interface RDEncoder : NSObject
+@property(nonatomic) VTCompressionSessionRef session;
+@property(nonatomic, strong) NSArray<RDEncodedFrame *> *frames;
+@property(nonatomic, strong) NSData *returnedPacket;
+@property(nonatomic) NSUInteger readIndex;
+@property(nonatomic) NSUInteger pending;
 @property(nonatomic) BOOL hevc;
 @end
 @implementation RDEncoder
@@ -138,8 +154,9 @@ static void rd_encoded(void *context, void *source, OSStatus status,
                        VTEncodeInfoFlags flags, CMSampleBufferRef sample) {
     @autoreleasepool {
         RDEncoder *encoder = (__bridge RDEncoder *)context;
-        encoder.status = status;
-        encoder.packet = nil;
+        RDEncodedFrame *frame = (__bridge RDEncodedFrame *)source;
+        frame.status = status;
+        frame.packet = nil;
         if (!status && sample && CMSampleBufferDataIsReady(sample)) {
             CFArrayRef attachments = CMSampleBufferGetSampleAttachmentsArray(sample, false);
             BOOL key = !attachments || !CFArrayGetCount(attachments) ||
@@ -153,13 +170,13 @@ static void rd_encoded(void *context, void *source, OSStatus status,
             OSStatus result = encoder.hevc
                 ? CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(format, 0, &bytes, &length, &count, &lengthSize)
                 : CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, 0, &bytes, &length, &count, &lengthSize);
-            if (result || lengthSize != 4) { encoder.status = -1; goto done; }
+            if (result || lengthSize != 4) { frame.status = -1; goto done; }
             if (key) {
                 for (size_t i = 0; i < count; i++) {
                     result = encoder.hevc
                         ? CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(format, i, &bytes, &length, NULL, NULL)
                         : CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, i, &bytes, &length, NULL, NULL);
-                    if (result) { encoder.status = result; goto done; }
+                    if (result) { frame.status = result; goto done; }
                     [packet appendBytes:prefix length:4];
                     [packet appendBytes:bytes length:length];
                 }
@@ -169,26 +186,28 @@ static void rd_encoded(void *context, void *source, OSStatus status,
             size_t offset = 0;
             while (offset + 4 <= total) {
                 uint32_t bigLength = 0;
-                if (CMBlockBufferCopyDataBytes(block, offset, 4, &bigLength)) { encoder.status = -1; goto done; }
+                if (CMBlockBufferCopyDataBytes(block, offset, 4, &bigLength)) { frame.status = -1; goto done; }
                 size_t nalLength = CFSwapInt32BigToHost(bigLength);
                 offset += 4;
-                if (!nalLength || nalLength > total - offset) { encoder.status = -1; goto done; }
+                if (!nalLength || nalLength > total - offset) { frame.status = -1; goto done; }
                 [packet appendBytes:prefix length:4];
                 size_t start = packet.length;
                 packet.length += nalLength;
                 if (CMBlockBufferCopyDataBytes(block, offset, nalLength, (uint8_t *)packet.mutableBytes + start)) {
-                    encoder.status = -1; goto done;
+                    frame.status = -1; goto done;
                 }
                 offset += nalLength;
             }
-            if (!total || offset != total) { encoder.status = -1; goto done; }
-            encoder.packet = packet;
-            encoder.key = key;
+            if (!total || offset != total) { frame.status = -1; goto done; }
+            frame.packet = packet;
+            frame.pts = CMTimeConvertScale(CMSampleBufferGetPresentationTimeStamp(sample),
+                                             1000, kCMTimeRoundingMethod_Default).value;
+            frame.key = key;
         } else if (!status) {
-            encoder.status = -1;
+            frame.status = -1;
         }
     done:
-        dispatch_semaphore_signal(encoder.ready);
+        dispatch_semaphore_signal(frame.ready);
     }
 }
 
@@ -196,7 +215,8 @@ void *rd_vt_new(uint32_t width, uint32_t height, bool hevc, uint32_t kbps, uint3
     @autoreleasepool {
         RDEncoder *encoder = [RDEncoder new];
         encoder.hevc = hevc;
-        encoder.ready = dispatch_semaphore_create(0);
+        encoder.frames = @[[RDEncodedFrame new], [RDEncodedFrame new],
+                           [RDEncodedFrame new], [RDEncodedFrame new]];
         NSDictionary *spec = @{(__bridge NSString *)kVTVideoEncoderSpecification_RequireHardwareAcceleratedVideoEncoder: @YES};
         VTCompressionSessionRef session = NULL;
         if (VTCompressionSessionCreate(NULL, width, height,
@@ -214,7 +234,6 @@ void *rd_vt_new(uint32_t width, uint32_t height, bool hevc, uint32_t kbps, uint3
                 (__bridge NSString *)(hevc ? kVTProfileLevel_HEVC_Main_AutoLevel : kVTProfileLevel_H264_High_AutoLevel)
         };
         if (VTSessionSetProperties(session, (__bridge CFDictionaryRef)properties)) return NULL;
-        VTSessionSetProperty(session, kVTCompressionPropertyKey_MaxFrameDelayCount, (__bridge CFNumberRef)@1);
         if (VTCompressionSessionPrepareToEncodeFrames(session)) return NULL;
         CFTypeRef hardware = NULL;
         OSStatus result = VTSessionCopyProperty(session,
@@ -227,21 +246,37 @@ void *rd_vt_new(uint32_t width, uint32_t height, bool hevc, uint32_t kbps, uint3
 }
 
 int rd_vt_encode(void *opaque, CVPixelBufferRef buffer, int64_t ms,
-                 const uint8_t **bytes, size_t *length, bool *key) {
+                 const uint8_t **bytes, size_t *length, bool *key, int64_t *pts) {
     @autoreleasepool {
         RDEncoder *encoder = (__bridge RDEncoder *)opaque;
-        encoder.packet = nil;
-        OSStatus status = VTCompressionSessionEncodeFrame(encoder.session, buffer,
-            CMTimeMake(ms, 1000), CMTimeMake(1, 60), NULL, NULL, NULL);
-        if (status) return status;
-        // Flush this single in-flight frame: no encoder lookahead or unbounded queue.
-        status = VTCompressionSessionCompleteFrames(encoder.session, kCMTimeInvalid);
-        if (status) return status;
-        if (dispatch_semaphore_wait(encoder.ready, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC))) return -1;
-        if (encoder.status || !encoder.packet.length) return encoder.status ?: -1;
-        *bytes = encoder.packet.bytes;
-        *length = encoder.packet.length;
-        *key = encoder.key;
+        NSUInteger capacity = encoder.frames.count;
+        if (encoder.pending >= capacity) return -1;
+        encoder.returnedPacket = nil;
+        // A null buffer only drains output; it never resubmits a captured surface.
+        if (buffer) {
+            RDEncodedFrame *input = encoder.frames[(encoder.readIndex + encoder.pending) % capacity];
+            input.packet = nil;
+            OSStatus status = VTCompressionSessionEncodeFrame(encoder.session, buffer,
+                CMTimeMake(ms, 1000), CMTimeMake(1, 60), NULL, (__bridge void *)input, NULL);
+            if (status) return status;
+            encoder.pending++;
+        }
+        if (!encoder.pending) return 1;
+        RDEncodedFrame *output = encoder.frames[encoder.readIndex];
+        long waitResult = dispatch_semaphore_wait(output.ready, DISPATCH_TIME_NOW);
+        if (waitResult && (!buffer || encoder.pending < capacity)) return 1;
+        if (waitResult) {
+            waitResult = dispatch_semaphore_wait(output.ready, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC));
+        }
+        if (waitResult) return -1;
+        encoder.pending--;
+        encoder.readIndex = (encoder.readIndex + 1) % capacity;
+        if (output.status || !output.packet.length) return output.status ?: -1;
+        encoder.returnedPacket = output.packet;
+        *bytes = encoder.returnedPacket.bytes;
+        *length = encoder.returnedPacket.length;
+        *key = output.key;
+        *pts = output.pts;
         return 0;
     }
 }

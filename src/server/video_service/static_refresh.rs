@@ -168,6 +168,12 @@ impl<'a> StaticRefresh<'a> {
     }
 
     pub(super) fn on_frame_encoded(&mut self, result: &FrameEncodeResult) {
+        #[cfg(all(target_os = "macos", feature = "screencapturekit"))]
+        if self.native_frame.is_some() {
+            // A surface may still be encoding when capture becomes idle, including the first frame.
+            self.on_encoded(true);
+            return;
+        }
         // VP8/VP9 rate control may drop a frame without an encoding error.
         // The latest input is still cached, so allow repeats even without output;
         // otherwise the final update may never be sent once capture becomes idle.

@@ -15,11 +15,17 @@ are copied into the existing protocol. Screenshots map/convert one buffer on
 request, outside the streaming path. Cursor rendering stays separate.
 
 ScreenCaptureKit captures at up to 60 FPS; the existing video QoS loop can consume
-less. Its system queue depth is three, and the application retains one latest
-pending surface. The encoder has one in-flight frame, no frame reordering, and
-flushes it before returning. Encoded interdependent frames are not discarded.
+less. Its system queue depth is eight, and the application retains one latest
+pending surface. The encoder has four fixed output slots and no frame reordering.
+Four is a capacity limit, not a target: all currently ready packets are returned in order
+in one existing protocol message. After submitting one surface, nonblocking
+drains take packets without submitting more surfaces or waiting for future output.
+Only a full pipeline waits for its oldest callback; otherwise an unfinished frame
+is reported as pending rather than an encoding error. No per-frame CompleteFrames
+drain is used. Encoded interdependent frames are not discarded.
 Static refresh retains one last surface and re-encodes it through the existing
-refresh policy. Bitrate/quality changes and recording use the existing protocol.
+refresh policy, including when the first packet is still pending. Bitrate/quality
+changes and recording use the existing protocol.
 
 Startup creates both new components before replacing either legacy component.
 Any startup error keeps the legacy pair. A runtime capture/encode error uses the
@@ -34,7 +40,8 @@ Validation
   cargo test --locked -p scrap --features screencapturekit macos_native
   cargo test --locked -p scrap --features screencapturekit macos_native -- --include-ignored
 The ignored test needs a physical Mac with hardware H264 and HEVC encoders. It
-feeds NV12 surfaces through both encoders, checks keyframe/Annex-B packet output,
+feeds NV12 surfaces through both encoders, checks ordered timestamps and
+keyframe/Annex-B output, drains every submitted frame without duplicate input,
 updates bitrate, and converts a screenshot. It needs no screen-recording grant.
 Full capture, visual correctness, reconnect/rotation/resolution handling, and the
 before/after CPU/FPS comparison still require an installed app and a peer.
@@ -45,8 +52,34 @@ Regression surface
 - libs/scrap/src/common/mod.rs: a macOS-feature-gated owned CVPixelBuffer frame
   and borrowed encoder input; no shared trait signatures change.
 - src/server/video_service.rs: one macOS-only activation hook after the existing
-  encoder setup, plus conversion of native screenshot buffers.
+  encoder setup, conversion of native screenshot buffers, and handling of
+  expected pending output without incrementing the encoder error counter.
 - src/server/video_service/static_refresh.rs: retain one native surface for the
   existing static refresh loop. Legacy YUV/Windows texture behavior is unchanged.
 - Configuration/UI/language maps: one default-off setting beside hardware codecs.
 - AWDL's previously tested re-enable correction is independent of video capture.
+
+60 versus 70 FPS capture ceiling, repeated control
+At 3024x1964, quality 50%, peer target 70 FPS, animation visible and AWDL down:
+- ceiling 60: Android decode 52.4 FPS, texture consumed 51.5 FPS, mean packet
+  return age 36.4 ms, Mac host CPU 10.1% of one core, global GPU IORegistry 45.6%.
+- ceiling 70: Android decode 54.0 FPS, texture consumed 53.5 FPS, mean packet
+  return age 36.0 ms, Mac host CPU 10.0% of one core, global GPU IORegistry 48.7%.
+Both powermetrics runs reported nominal thermal pressure. Keep 60 as the current
+baseline: 70 offered only a small FPS increase in these short sequential runs.
+These tests do not establish statistical significance, stable 60+ FPS, or
+end-to-end input latency. Global GPU counters include the animation and other apps.
+
+Release configuration
+The selected capture ceiling is 60 FPS, with four bounded encoder slots, an
+eight-surface ScreenCaptureKit pool and draining of all ready packets in order.
+Temporary per-frame timers, counters, /tmp switches and NSLog statistics have
+been removed. The default-off native setting and the existing fallback remain.
+Local SDKs, probe binaries, captured metrics and signing material are excluded
+from Git; release builds use the repository's normal application identifiers.
+
+Known limits
+A final packet that is not ready when capture becomes idle is collected through
+the existing static-refresh policy, whose initial interval is 100 ms. This is
+not a guarantee of 60 displayed FPS or immediate delivery on a static desktop.
+The native feature remains opt-in; unsupported or failed sessions use legacy video.
