@@ -1,0 +1,122 @@
+name: Release
+run-name: Release v${{ inputs.version }} (Android)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, without v (X.Y.Z or X.Y.Z-N)'
+        required: true
+        type: string
+      android-version-code:
+        description: 'Android versionCode, greater than every previously published build'
+        required: true
+        type: string
+      prerelease:
+        description: Mark as a prerelease
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require master
+        env:
+          SOURCE_REF: ${{ github.ref }}
+        run: test "$SOURCE_REF" = refs/heads/master
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate release inputs
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
+        run: |
+          python3 -m unittest discover -s .github/scripts -p test_android_release.py
+          python3 .github/scripts/android_release.py check --version "$RELEASE_VERSION" --code "$ANDROID_VERSION_CODE"
+
+      - name: Require a new tag
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        with:
+          script: |
+            const ref = `tags/v${process.env.RELEASE_VERSION}`;
+            try {
+              await github.rest.git.getRef({...context.repo, ref});
+              core.setFailed(`Tag ${ref} already exists; choose a new version.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+  build-android:
+    needs: prepare
+    # The shared workflow also declares write permissions for its skipped SBOM job.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/flutter-build.yml
+    secrets: inherit
+    with:
+      platforms: android
+      upload-artifact: true
+      release-version: ${{ inputs.version }}
+      android-version-code: ${{ inputs.android-version-code }}
+      require-android-signing: true
+      publish-release: false
+
+  publish:
+    needs: build-android
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: rustdesk-${{ inputs.version }}-*.apk
+          path: release
+          merge-multiple: true
+
+      - name: Tag source and publish signed release
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          ANDROID_VERSION_CODE: ${{ inputs.android-version-code }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        with:
+          script: |
+            const fs = require('fs');
+            const crypto = require('crypto');
+            const version = process.env.RELEASE_VERSION;
+            const tag = `v${version}`;
+            const files = fs.readdirSync('release').filter(name => name.endsWith('.apk')).sort();
+            for (const arch of ['aarch64', 'armv7', 'x86_64', 'universal']) {
+              if (files.filter(name => name.startsWith(`rustdesk-${version}-${arch}-`)).length !== 1)
+                throw new Error(`Expected exactly one signed ${arch} APK`);
+            }
+            if (files.length !== 4) throw new Error('Unexpected release assets');
+            fs.writeFileSync('release/SHA256SUMS', files.map(name =>
+              `${crypto.createHash('sha256').update(fs.readFileSync(`release/${name}`)).digest('hex')}  ${name}\n`
+            ).join(''));
+            await github.rest.git.createRef({...context.repo, ref: `refs/tags/${tag}`, sha: context.sha});
+            const {data: release} = await github.rest.repos.createRelease({
+              ...context.repo, tag_name: tag, name: `RustDesk ${version}`, draft: true,
+              prerelease: process.env.PRERELEASE === 'true',
+              body: `Android release from master at ${context.sha}.\n\nVersion: ${version}\nAndroid versionCode: ${process.env.ANDROID_VERSION_CODE}\n\nAPKs are signed with the repository's Android release key.`,
+            });
+            for (const name of [...files, 'SHA256SUMS']) {
+              await github.rest.repos.uploadReleaseAsset({
+                ...context.repo, release_id: release.id, name, data: fs.readFileSync(`release/${name}`),
+              });
+            }
+            await github.rest.repos.updateRelease({...context.repo, release_id: release.id, draft: false});
+            await core.summary.addLink(`Release ${tag}`, release.html_url).write();

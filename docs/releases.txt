@@ -1,0 +1,64 @@
+Manual releases
+
+The Release workflow (.github/workflows/release.yml) builds the master commit
+selected at dispatch time. It currently publishes Android only: ARM64, ARMv7,
+x86_64 and universal APKs, plus SHA256SUMS. macOS can later be added as another
+build job before the shared publish job.
+
+Setup
+In repository Settings > Secrets and variables > Actions, create:
+  ANDROID_SIGNING_KEY         Base64 of the complete release keystore
+  ANDROID_ALIAS               alias of its private key (rustdesk-release)
+  ANDROID_KEY_STORE_PASSWORD  keystore password
+  ANDROID_KEY_PASSWORD        private key password (same password for PKCS#12)
+
+Use the same keystore for future releases and keep a backup with its password.
+Keystores, passwords and their Base64 exports belong outside the repository.
+The local setup uses ../.toolchains/signing/android beside the checkout:
+  rustdesk-release.p12        password-protected PKCS#12, RSA 4096
+  keystore-base64.txt         value for ANDROID_SIGNING_KEY
+  key-alias.txt               value for ANDROID_ALIAS
+  keystore-password.txt       value for both password secrets
+  certificate-sha256.txt      public certificate fingerprint
+No signing material is uploaded by local tooling automatically.
+
+Run
+The workflow must first be merged into the repository's default branch so that
+GitHub displays its Run workflow button. Open Actions > Release > Run workflow,
+select master, enter the version without v (X.Y.Z or X.Y.Z-N) and an Android
+versionCode greater than every previously released base build number. Choose
+whether this is a prerelease. Runs against other branches are rejected.
+
+VersionName is the supplied version; universal uses the supplied versionCode.
+Flutter adds ABI offsets to split APK versionCodes: ARMv7 +1000, ARM64 +2000,
+x86_64 +4000. Continue using the same APK variant for updates. The base code must
+also exceed the number in pubspec.yaml; leave room for the largest ABI offset
+below Android's 2100000000 limit.
+
+Version stamping changes Cargo.toml, the root Cargo.lock package and pubspec.yaml
+only inside CI's disposable checkout. It does not commit generated version edits.
+The vVERSION tag points to the exact master source commit used for the build.
+An existing tag is never moved or reused. After all builds and signature/version
+checks pass, the workflow creates the tag and a draft release, uploads every APK
+and the checksums, then publishes it. If publication fails, inspect the draft
+release/tag before choosing a new version; reruns do not overwrite an existing tag.
+Missing signing secrets fail the build; the manual workflow has no unsigned
+release fallback. Tags created using GITHUB_TOKEN do not trigger Flutter Tag Build.
+
+The application ID is com.carriez.flutter_hbb. This release key differs from the
+official RustDesk key and from a local debug key: the first installation cannot
+update an APK signed by either of those keys. Export settings before replacing
+such an installation. Subsequent releases signed with this key can update it.
+
+Validation and regression surface
+  python3 -m unittest discover -s .github/scripts -p test_android_release.py
+  actionlint .github/workflows/release.yml .github/workflows/flutter-build.yml
+The shared workflow already contains a legacy `if: False` lint diagnostic in its
+disabled web job; it is unrelated to this release workflow.
+
+Existing runtime/app code is unchanged. flutter-build.yml adds optional inputs,
+Android version/signature checks and deferred publication. The Android-only mode
+skips other platform jobs and selects the pinned NDK for native APK packaging.
+Existing callers retain their default platform, version and publication behavior.
+.gitignore additionally excludes Android keystore formats. Release automation,
+its Python helper and tests are the only new executable paths.
