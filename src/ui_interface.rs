@@ -171,6 +171,10 @@ pub fn refresh_options() {
 
 #[inline]
 pub fn get_option<T: AsRef<str>>(key: T) -> String {
+    #[cfg(all(target_os = "macos", feature = "flutter"))]
+    if key.as_ref() == keys::OPTION_MACOS_AWDL_STATUS {
+        return crate::platform::macos::awdl::status();
+    }
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let map = OPTIONS.lock().unwrap();

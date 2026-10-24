@@ -4,6 +4,8 @@
 
 mod update_temp;
 mod verified_dmg;
+#[cfg(feature = "flutter")]
+pub(crate) mod awdl;
 
 #[cfg(test)]
 #[path = "macos/verified_dmg_tests.rs"]

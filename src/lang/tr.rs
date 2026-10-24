@@ -815,5 +815,11 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Off", "Kapalı"),
         ("api_server_connection_tip", "Özel sunucunuz şifrelenmemiş HTTP kullanıyor. HTTPS'yi etkinleştirmesi için yöneticinize başvurun."),
         ("api_server_empty_tip", "API sunucusu alanı boş bırakıldığında özel sunucunuz varsayılan olarak HTTP kullanır. HTTPS'yi etkinleştirmesi için yöneticinize başvurun."),
+        ("Pause AWDL during incoming sessions", ""),
+        ("Temporarily disables AirDrop and Continuity. AWDL is restored when the last session ends.", ""),
+        ("Install or update the RustDesk service to use this option.", ""),
+        ("AWDL could not be paused or restored. See the service log.", ""),
+        ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
+        ("AWDL is paused for incoming sessions.", ""),
     ].iter().cloned().collect();
 }

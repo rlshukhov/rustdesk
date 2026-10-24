@@ -228,6 +228,8 @@ const String kOptionDisableFloatingWindow = "disable-floating-window";
 const String kOptionKeepScreenOn = "keep-screen-on";
 
 const String kOptionKeepAwakeDuringIncomingSessions = "keep-awake-during-incoming-sessions";
+const String kOptionMacosPauseAwdl = "allow-macos-pause-awdl";
+const String kOptionMacosAwdlStatus = "macos-awdl-status";
 const String kOptionKeepAwakeDuringOutgoingSessions = "keep-awake-during-outgoing-sessions";
 
 const String kOptionShowMobileAction = "showMobileActions";
