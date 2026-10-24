@@ -4,10 +4,29 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from android_release import prepare, validate_version
+from android_release import prepare, validate_version, verify_signature
 
 
 class AndroidReleaseTests(unittest.TestCase):
+    def test_release_signature_accepts_build_tools_36_and_37(self):
+        fingerprint = "a" * 64
+        for signer in ["Signer #1", "V3.0 Signer:"]:
+            with self.subTest(signer=signer):
+                verify_signature(f"{signer} certificate SHA-256 digest: {fingerprint}\n", fingerprint)
+
+    def test_release_signature_rejects_wrong_missing_multiple_and_debug_signers(self):
+        fingerprint = "a" * 64
+        valid = f"V3.0 Signer: certificate SHA-256 digest: {fingerprint}\n"
+        invalid = [
+            valid.replace(fingerprint, "b" * 64),
+            f"Source Stamp Signer certificate SHA-256 digest: {fingerprint}\n",
+            valid + f"Signer #2 certificate SHA-256 digest: {'b' * 64}\n",
+            valid + "V3.0 Signer: certificate DN: CN=Android Debug\n",
+        ]
+        for result in invalid:
+            with self.subTest(result=result), self.assertRaises(ValueError):
+                verify_signature(result, fingerprint)
+
     def test_release_matrices_select_only_the_requested_jobs(self):
         workflows = Path(__file__).resolve().parents[1] / "workflows"
         cases = [

@@ -40,6 +40,19 @@ def prepare(root, version, code, check_only=False):
             path.write_text(text)
 
 
+def verify_signature(result, fingerprint):
+    # Build Tools 37 labels the unrotated v3 signer as "V3.0 Signer:".
+    signers = re.findall(
+        r"^(?:Signer #[0-9]+|V3\.0 Signer:) certificate SHA-256 digest: ([0-9a-f]{64})$",
+        result, re.M,
+    )
+    if signers != [fingerprint] or "CN=Android Debug" in result:
+        raise ValueError(
+            f"APK is not signed exclusively by the expected release key: "
+            f"expected SHA-256 {fingerprint}, found {signers}"
+        )
+
+
 def verify_apk(apk, tools, version, code, arch):
     validate_version(version, code)
     apk_code = int(code) + {"armv7": 1000, "aarch64": 2000, "x86_64": 4000, "universal": 0}[arch]
@@ -61,9 +74,7 @@ def verify_apk(apk, tools, version, code, arch):
     result = subprocess.run([
         str(tools / "apksigner"), "verify", "--verbose", "--print-certs", str(apk),
     ], capture_output=True, text=True, check=True).stdout
-    signers = re.findall(r"^Signer #[0-9]+ certificate SHA-256 digest: ([0-9a-f]+)$", result, re.M)
-    if signers != [fingerprint] or "CN=Android Debug" in result:
-        raise ValueError("APK is not signed exclusively by the expected release key")
+    verify_signature(result, fingerprint)
     metadata = subprocess.run([
         str(tools / "aapt"), "dump", "badging", str(apk),
     ], capture_output=True, text=True, check=True).stdout
