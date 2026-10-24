@@ -1,3 +1,5 @@
+import json
+import re
 import tempfile
 from pathlib import Path
 import unittest
@@ -6,6 +8,29 @@ from android_release import prepare, validate_version
 
 
 class AndroidReleaseTests(unittest.TestCase):
+    def test_release_matrices_select_only_the_requested_jobs(self):
+        workflows = Path(__file__).resolve().parents[1] / "workflows"
+        cases = [
+            ("bridge.yml", "generate_bridge", "artifact-name",
+             ["bridge-artifact", "bridge-artifact-flutter-3.44"], ["bridge-artifact"]),
+            ("flutter-build.yml", "build-for-macOS", "target",
+             ["x86_64-apple-darwin", "aarch64-apple-darwin"], ["aarch64-apple-darwin"]),
+            ("flutter-build.yml", "build-rustdesk-android", "target",
+             ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"],
+             ["aarch64-linux-android"]),
+        ]
+        for filename, job, field, all_targets, default_targets in cases:
+            with self.subTest(job=job):
+                source = (workflows / filename).read_text()
+                block = re.search(rf"\n  {job}:\n(.*?)    steps:\n", source, re.S)[1]
+                choices = re.findall(r"'(\[.*?\])'", block)
+                self.assertEqual(len(choices), 2)
+                for choice, expected in zip(choices, [all_targets, default_targets]):
+                    jobs = json.loads(choice)
+                    self.assertEqual([item[field] for item in jobs], expected)
+                    for item in jobs:
+                        self.assertIn("os", item)
+
     def test_invalid_inputs(self):
         for version, code in [("v1.5.2", "69"), ("1.5.2; id", "69"), ("01.5.2", "69"),
                               ("1.5.2", "0"), ("1.5.2", "2100000001"), ("1.5.2", "69\n")]:
