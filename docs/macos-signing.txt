@@ -36,6 +36,9 @@ This signs embedded code first, then the app, and verifies signatures and the
 microphone entitlement. Local mode omits hardened runtime and online timestamps;
 Developer ID mode retains the existing hardened-runtime/timestamp behavior.
 
+Merge the workflow changes into master before enabling the signing Secrets.
+The old workflow assumes every certificate requires Apple notarization.
+
 GitHub Settings > Secrets and variables > Actions:
   Variable MACOS_SIGNING_MODE       local
   Secret MACOS_P12_BASE64           base64 of identity.p12

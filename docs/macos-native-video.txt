@@ -1,7 +1,7 @@
 Native macOS video
 
 Requires the screencapturekit Cargo feature and macOS 12.3+. The ARM64 release
-already enables this feature and minimum OS version. In Settings > Display >
+already enables this feature and minimum OS version. In Settings > General >
 Hardware Codec, enable "Use native macOS video capture", keep hardware codecs
 on, then reconnect. The option defaults to off and affects incoming monitor
 sessions using negotiated H264/HEVC 4:2:0. Camera capture and software codecs
