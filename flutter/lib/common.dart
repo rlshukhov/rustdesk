@@ -4066,6 +4066,10 @@ void earlyAssert() {
 }
 
 void checkUpdate() {
+  if (!kBuiltinUpdatesEnabled) {
+    stateGlobal.updateUrl.value = '';
+    return;
+  }
   if (!isWeb) {
     if (!bind.isCustomClient()) {
       platformFFI.registerEventHandler(

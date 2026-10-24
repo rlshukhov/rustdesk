@@ -1010,8 +1010,11 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
     }
 }
 
+// The fork has no update-metadata trust chain; updates are installed from Releases.
+pub(crate) const BUILTIN_UPDATES_ENABLED: bool = false;
+
 pub fn check_software_update() {
-    if is_custom_client() {
+    if !BUILTIN_UPDATES_ENABLED || is_custom_client() {
         return;
     }
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
@@ -1130,6 +1133,10 @@ fn process_software_update_check_response(bytes: Bytes) -> ResultType<()> {
 // Because the url is always `https://api.rustdesk.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
+    if !BUILTIN_UPDATES_ENABLED {
+        clear_software_update_url();
+        return Ok(());
+    }
     let (request, url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
     let proxy_conf = Config::get_socks();
@@ -3050,11 +3057,20 @@ pub fn is_valid_untrusted_peer_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use hbb_common::tokio::{
         self,
         time::{interval, interval_at, sleep, Duration, Instant, Interval},
     };
     use std::collections::HashSet;
+
+    #[test]
+    fn fork_updates_clear_upstream_offer_without_contacting_update_service() {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() =
+            "https://github.com/rustdesk/rustdesk/releases/tag/v99.0.0".to_owned();
+        do_check_software_update().unwrap();
+        assert!(SOFTWARE_UPDATE_URL.lock().unwrap().is_empty());
+    }
 
     #[test]
     fn parses_stable_rustdesk_release_url() {

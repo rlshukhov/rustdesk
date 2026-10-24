@@ -6,6 +6,10 @@ import 'package:get/get.dart';
 
 export 'common/widgets/keyboard_shortcuts/shortcut_constants.dart';
 
+// Keep aligned with common::BUILTIN_UPDATES_ENABLED in Rust.
+const bool kBuiltinUpdatesEnabled = false;
+const String kForkReleasesUrl = 'https://github.com/rlshukhov/rustdesk/releases';
+
 const int kMaxVirtualDisplayCount = 4;
 const int kAllVirtualDisplay = -1;
 

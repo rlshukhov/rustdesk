@@ -91,6 +91,9 @@ pub fn verified_update_artifact_for_release_page_url(
 pub fn verified_update_artifact_for_download_url(
     download_url: &str,
 ) -> ResultType<VerifiedUpdateArtifact> {
+    if !crate::common::BUILTIN_UPDATES_ENABLED {
+        bail!("Built-in updates are disabled in this fork; use GitHub Releases");
+    }
     VERIFIED_UPDATE_ARTIFACT
         .lock()
         .unwrap()
@@ -104,6 +107,9 @@ pub(super) fn verified_update_artifact_from_release_page_url(
     update_url: &str,
     query: &UpdateArtifactQuery<'_>,
 ) -> ResultType<VerifiedUpdateArtifact> {
+    if !crate::common::BUILTIN_UPDATES_ENABLED {
+        bail!("Built-in updates are disabled in this fork; use GitHub Releases");
+    }
     let release_id = release_id_from_update_url(update_url)?;
     let display_version = display_version_from_release_id(&release_id)?;
     let expected_artifact_url_prefix =
@@ -210,6 +216,24 @@ fn is_plain_update_filename(filename: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fork_updates_reject_upstream_resolution_and_cached_installation() {
+        let query = current_update_artifact_query(false);
+        let error = verified_update_artifact_from_release_page_url(
+            "https://github.com/rustdesk/rustdesk/releases/tag/v99.0.0",
+            &query,
+        )
+        .err()
+        .unwrap();
+        assert!(error.to_string().contains("disabled in this fork"));
+        assert!(verified_update_artifact_for_download_url(
+            "https://github.com/rustdesk/rustdesk/releases/download/v99.0.0/update.dmg",
+        ).is_err());
+        #[cfg(target_os = "macos")]
+        assert!(!crate::updater::check_update_as_root().unwrap());
+    }
+
 
     #[test]
     fn update_download_file_accepts_expected_github_asset_urls() {
