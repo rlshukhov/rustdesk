@@ -15,7 +15,7 @@
 
 ## Установка
 
-В Releases доступны подписанные **Android ARM64 APK** и **macOS ARM64 DMG**. Подписи отличаются от официального RustDesk — перед переходом сохраните настройки. Обновления устанавливаются вручную; встроенное автообновление отключено.
+В Releases доступны подписанные **Android ARM64 APK** и **macOS ARM64 DMG**. Подписи отличаются от официального RustDesk — перед переходом сохраните настройки. Обновления устанавливаются вручную; встроенная проверка обновлений и автообновление отключены.
 
 [Android](docs/android-texture-decoder.txt) · [macOS](docs/macos-native-video.txt) · [AWDL](docs/macos-awdl.txt) · [Подпись и обновления](docs/macos-signing.txt) · [Сборка релиза](docs/releases.txt)
 
