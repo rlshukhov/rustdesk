@@ -1976,7 +1976,7 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde_derive::Deserialize)]
 struct NativeGestureInput {
     scroll: bool,
     phase: u32,

@@ -125,9 +125,14 @@ class _RawTouchGestureDetectorRegionState
     }
   }
 
+  void _cancelMacOSGesture() {
+    _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+    _macOSGesture = null;
+  }
+
   @override
   void dispose() {
-    _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+    _cancelMacOSGesture();
     super.dispose();
   }
 
@@ -367,6 +372,7 @@ class _RawTouchGestureDetectorRegionState
   }
 
   onOneFingerPanStart(BuildContext context, DragStartDetails d) async {
+    _cancelMacOSGesture();
     final TapDownDetails? lastTapDownDetails = _lastTapDownDetails;
     _lastTapDownDetails = null;
     lastDeviceKind = d.kind ?? lastDeviceKind;
@@ -473,7 +479,7 @@ class _RawTouchGestureDetectorRegionState
       final position = ffi.cursorModel.getRemotePosInRect(d.localFocalPoint);
       if (position != null &&
           !ffi.cursorModel.shouldBlock(d.localFocalPoint.dx, d.localFocalPoint.dy)) {
-        _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+        _cancelMacOSGesture();
         _macOSGesture = MacOSGesture(
             position, d.localFocalPoint, ffi.canvasModel.scale);
         inputModel.sendMouse('up', MouseButtons.left);
@@ -491,8 +497,7 @@ class _RawTouchGestureDetectorRegionState
     }
     if (_macOSGesture != null) {
       if (!ffiModel.keyboard || ffiModel.viewOnly) {
-        _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
-        _macOSGesture = null;
+        _cancelMacOSGesture();
         return;
       }
       _sendMacOSGesture(_macOSGesture!.update(d.scale, d.localFocalPoint));
@@ -560,6 +565,7 @@ class _RawTouchGestureDetectorRegionState
   get onThreeFingerVerticalDragUpdate => ffi.ffiModel.isPeerAndroid
       ? null
       : (d) {
+          _cancelMacOSGesture();
           _mouseScrollIntegral += d.delta.dy / 4;
           if (_mouseScrollIntegral > 1) {
             inputModel.scroll(1);
