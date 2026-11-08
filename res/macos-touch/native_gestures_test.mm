@@ -10,6 +10,7 @@ int main() {
         for (int i = 0; i < 4; i++) {
             CGEventRef event = CreateNativeGesture(false, phases[i], -400, 200, 0.25, 0, 0);
             assert(event);
+            assert(CGEventGetIntegerValueField(event, kCGEventSourceUserData) == 100);
             NSEvent *native = [NSEvent eventWithCGEvent:event];
             assert(native.type == NSEventTypeMagnify);
             assert(native.phase == expected[i]);

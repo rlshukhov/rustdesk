@@ -1,6 +1,9 @@
 #import <ApplicationServices/ApplicationServices.h>
 #include <cmath>
 
+// Same marker as enigo: remote gestures must pass RustDesk's local-input blocker.
+static const int64_t kRustDeskInputMarker = 100;
+
 static CGEventRef CreateNativeGesture(bool scroll, uint32_t phase, double x, double y,
                                      double magnification, double dx, double dy) {
     if ((phase != 1 && phase != 2 && phase != 4 && phase != 8) ||
@@ -36,6 +39,7 @@ static CGEventRef CreateNativeGesture(bool scroll, uint32_t phase, double x, dou
         CGEventSetDoubleValueField(event, static_cast<CGEventField>(113), magnification);
     }
     CGEventSetLocation(event, CGPointMake(x, y));
+    CGEventSetIntegerValueField(event, kCGEventSourceUserData, kRustDeskInputMarker);
     return event;
 }
 
@@ -48,6 +52,7 @@ extern "C" bool PostNativeGesture(bool scroll, uint32_t phase, double x, double 
         CGEventRef moved = CGEventCreateMouseEvent(nullptr, kCGEventMouseMoved,
                                                   CGPointMake(x, y), kCGMouseButtonLeft);
         if (!moved) { CFRelease(event); return false; }
+        CGEventSetIntegerValueField(moved, kCGEventSourceUserData, kRustDeskInputMarker);
         CGEventPost(kCGHIDEventTap, moved);
         CFRelease(moved);
     }
