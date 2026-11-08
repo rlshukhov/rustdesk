@@ -1011,7 +1011,7 @@ jobs:
           "$RUNNER_TEMP/native-gestures-test"
 
       - name: Run the Dart tests
-        if: ${{ !inputs.upload-artifact && matrix.job.arch == 'aarch64' }}
+        if: ${{ matrix.job.arch == 'aarch64' && (!inputs.upload-artifact || inputs.release-version != '') }}
         working-directory: flutter
         run: flutter test --timeout 60s
 
@@ -1068,7 +1068,7 @@ jobs:
           cargo test --locked --release --lib update_metadata::tests --features "flutter,hwcodec,unix-file-copy-paste${{ matrix.job.extra-cargo-features }}"
 
       - name: Run the Rust tests
-        if: ${{ !inputs.upload-artifact && matrix.job.arch == 'aarch64' }}
+        if: ${{ matrix.job.arch == 'aarch64' && (!inputs.upload-artifact || inputs.release-version != '') }}
         run: |
           # The build's own features, so the tests see the code that ships. MACOSX_DEPLOYMENT_TARGET
           # comes from the build step's export.

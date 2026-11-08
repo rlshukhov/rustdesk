@@ -68,7 +68,7 @@ pub fn cancel(conn: i32) {
         event.magnification = 0.0;
         event.delta_x = 0.0;
         event.delta_y = 0.0;
-        unsafe {
+        if !unsafe {
             PostNativeGesture(
                 event.scroll,
                 event.phase,
@@ -77,6 +77,10 @@ pub fn cancel(conn: i32) {
                 event.magnification,
                 event.delta_x,
                 event.delta_y,
+            )
+        } {
+            hbb_common::log::trace!(
+                "Native gesture cancellation failed; Accessibility may be unavailable"
             );
         }
     }

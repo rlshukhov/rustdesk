@@ -89,9 +89,23 @@ static void BeginGestureProbe(NSWindow *window, GestureContent *content) {
         });
 }
 
-int main(void) {
+int main(int argc, const char **argv) {
     @autoreleasepool {
         if (!AXIsProcessTrusted()) { fprintf(stderr, "Accessibility permission is required.\n"); return 2; }
+        if (argc == 4 && (!strcmp(argv[1], "--external-pinch") || !strcmp(argv[1], "--external-scroll"))) {
+            char *endX, *endY;
+            double x = strtod(argv[2], &endX), y = strtod(argv[3], &endY);
+            if (*endX || *endY || endX == argv[2] || endY == argv[3]) return 2;
+            BOOL scroll = !strcmp(argv[1], "--external-scroll");
+            for (int frame = 0; frame <= 11; frame++) {
+                BOOL changed = frame > 0 && frame < 11;
+                if (!PostNativeGesture(scroll, frame == 0 ? 1 : (frame == 11 ? 4 : 2),
+                    x, y, !scroll && changed ? 0.08 : 0, 0, scroll && changed ? -30 : 0)) return 3;
+                usleep(80000);
+            }
+            printf("SENT external %s; check the target application for the result.\n", scroll ? "scroll" : "pinch");
+            return 0;
+        }
         [TouchApp sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
         [NSApp finishLaunching];
