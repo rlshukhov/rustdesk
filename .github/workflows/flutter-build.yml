@@ -893,8 +893,8 @@ jobs:
       matrix:
         job: >-
           ${{ fromJSON(inputs.platforms == 'all' &&
-            '[{"target":"x86_64-apple-darwin","os":"macos-15-intel","extra-build-args":"","extra-cargo-features":"","arch":"x86_64","vcpkg-triplet":"x64-osx"},{"target":"aarch64-apple-darwin","os":"macos-14","extra-build-args":"--screencapturekit","extra-cargo-features":",screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]' ||
-            '[{"target":"aarch64-apple-darwin","os":"macos-14","extra-build-args":"--screencapturekit","extra-cargo-features":",screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]') }}
+            '[{"target":"x86_64-apple-darwin","os":"macos-15-intel","extra-build-args":"","extra-cargo-features":"","arch":"x86_64","vcpkg-triplet":"x64-osx"},{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","extra-cargo-features":",screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]' ||
+            '[{"target":"aarch64-apple-darwin","os":"macos-15","extra-build-args":"--screencapturekit","extra-cargo-features":",screencapturekit","arch":"aarch64","vcpkg-triplet":"arm64-osx"}]') }}
     steps:
       - name: Require local signing certificate
         if: env.MACOS_SIGNING_MODE == 'local'
