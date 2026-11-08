@@ -3,6 +3,7 @@
 // https://github.com/rust-windowing/winit
 
 mod update_temp;
+pub mod native_gestures;
 mod verified_dmg;
 #[cfg(feature = "flutter")]
 pub(crate) mod awdl;

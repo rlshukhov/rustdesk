@@ -118,6 +118,7 @@ class FfiModel with ChangeNotifier {
   bool? _secure;
   bool? _direct;
   bool _touchMode = false;
+  bool nativeMacOSGestures = false;
   late VirtualMouseMode virtualMouseMode;
   Timer? _timer;
   Timer? _restartReconnectDelayTimer;
@@ -160,6 +161,10 @@ class FfiModel with ChangeNotifier {
   bool get inputBlocked => _inputBlocked;
 
   bool get touchMode => _touchMode;
+
+  bool get supportsNativeMacOSGestures =>
+      _pi.platform == kPeerPlatformMacOS &&
+      _pi.platformAdditions['native_gestures'] == true;
 
   bool get isPeerAndroid => _pi.platform == kPeerPlatformAndroid;
   bool get isPeerMobile => isPeerAndroid;
@@ -1410,6 +1415,8 @@ class FfiModel with ChangeNotifier {
     }
     if (isMobile) {
       virtualMouseMode.loadOptions();
+      nativeMacOSGestures =
+          bind.mainGetLocalOption(key: kOptionNativeMacOSGestures) == 'Y';
     }
     if (connType == ConnType.fileTransfer) {
       parent.target?.fileModel.onReady();

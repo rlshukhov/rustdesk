@@ -946,16 +946,34 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         child: SingleChildScrollView(
             controller: ScrollController(),
             padding: EdgeInsets.symmetric(vertical: 10),
-            child: GestureHelp(
-              touchMode: gFFI.ffiModel.touchMode,
-              onTouchModeChange: (t) {
-                gFFI.ffiModel.toggleTouchMode();
-                final v = gFFI.ffiModel.touchMode ? 'Y' : 'N';
-                bind.mainSetLocalOption(key: kOptionTouchMode, value: v);
-              },
-              virtualMouseMode: gFFI.ffiModel.virtualMouseMode,
-              inputModel: gFFI.inputModel,
-            )));
+            child: Column(children: [
+              if (gFFI.ffiModel.supportsNativeMacOSGestures)
+                StatefulBuilder(
+                    builder: (context, setState) => SwitchListTile(
+                          title: Text(translate(
+                              'Native gestures on Mac (experimental)')),
+                          subtitle: Text(translate(
+                              'Pinch to zoom and two-finger scrolling control the remote Mac')),
+                          value: gFFI.ffiModel.nativeMacOSGestures,
+                          onChanged: (value) async {
+                            await bind.mainSetLocalOption(
+                                key: kOptionNativeMacOSGestures,
+                                value: value ? 'Y' : 'N');
+                            gFFI.ffiModel.nativeMacOSGestures = value;
+                            if (context.mounted) setState(() {});
+                          },
+                        )),
+              GestureHelp(
+                touchMode: gFFI.ffiModel.touchMode,
+                onTouchModeChange: (t) {
+                  gFFI.ffiModel.toggleTouchMode();
+                  final v = gFFI.ffiModel.touchMode ? 'Y' : 'N';
+                  bind.mainSetLocalOption(key: kOptionTouchMode, value: v);
+                },
+                virtualMouseMode: gFFI.ffiModel.virtualMouseMode,
+                inputModel: gFFI.inputModel,
+              )
+            ])));
   }
 
   // * Currently mobile does not enable map mode

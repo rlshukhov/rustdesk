@@ -185,8 +185,21 @@ message TouchEvent {
 message PointerDeviceEvent {
   oneof union {
     TouchEvent touch_event = 1;
+    NativeGesture native_gesture = 3;
   }
   repeated ControlKey modifiers = 2;
+}
+
+// Ready-made macOS gestures; these are not individual touchscreen contacts.
+message NativeGesture {
+  bool scroll = 1;
+  // IOHID phases: began=1, changed=2, ended=4, cancelled=8.
+  uint32 phase = 2;
+  int32 x = 3;
+  int32 y = 4;
+  double magnification = 5;
+  double delta_x = 6;
+  double delta_y = 7;
 }
 
 message MouseEvent {

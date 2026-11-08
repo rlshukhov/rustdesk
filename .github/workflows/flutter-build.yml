@@ -1004,6 +1004,12 @@ jobs:
           name: bridge-artifact
           path: ./
 
+      - name: Test native macOS gesture encoding
+        run: |
+          clang++ -std=c++17 -fobjc-arc -framework AppKit -framework ApplicationServices \
+            res/macos-touch/native_gestures_test.mm -o "$RUNNER_TEMP/native-gestures-test"
+          "$RUNNER_TEMP/native-gestures-test"
+
       - name: Run the Dart tests
         if: ${{ !inputs.upload-artifact && matrix.job.arch == 'aarch64' }}
         working-directory: flutter
@@ -1070,6 +1076,7 @@ jobs:
           cargo test --locked --release --lib --features "$FEATURES"
           # Opt-in, and its macOS tests run nowhere else.
           cargo test --locked --release -p clipboard --features unix-file-copy-paste
+          cargo test --locked --release -p base protos::tests
           if [[ "${{ matrix.job.extra-cargo-features }}" == *screencapturekit* ]]; then
             cargo test --locked --release -p scrap --features screencapturekit macos_native
           fi

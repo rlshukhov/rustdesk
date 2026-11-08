@@ -1942,12 +1942,49 @@ pub fn session_send_pointer(session_id: SessionID, msg: String) {
         let command = m.get("command").is_some();
         match (m.get("k"), m.get("v")) {
             (Some(k), Some(v)) => match k.as_str() {
+                Some("macos-gesture") => {
+                    if let (Ok(gesture), Some(session)) = (
+                        serde_json::from_value::<NativeGestureInput>(v.clone()),
+                        sessions::get_session_by_session_id(&session_id),
+                    ) {
+                        let mut event = PointerDeviceEvent::new();
+                        event.set_native_gesture(NativeGesture {
+                            scroll: gesture.scroll,
+                            phase: gesture.phase,
+                            x: gesture.x,
+                            y: gesture.y,
+                            magnification: gesture.magnification,
+                            delta_x: gesture.delta_x,
+                            delta_y: gesture.delta_y,
+                            ..Default::default()
+                        });
+                        send_pointer_device_event(
+                            event,
+                            false,
+                            false,
+                            false,
+                            false,
+                            session.as_ref(),
+                        );
+                    }
+                }
                 Some("touch") => session_send_touch_event(session_id, v, alt, ctrl, shift, command),
                 _ => {}
             },
             _ => {}
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct NativeGestureInput {
+    scroll: bool,
+    phase: u32,
+    x: i32,
+    y: i32,
+    magnification: f64,
+    delta_x: f64,
+    delta_y: f64,
 }
 
 #[inline]

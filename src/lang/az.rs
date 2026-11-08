@@ -822,5 +822,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("AWDL was already disabled; RustDesk will leave it unchanged.", ""),
         ("AWDL is paused for incoming sessions.", ""),
         ("Use native macOS video capture", ""),
+        ("Native gestures on Mac (experimental)", ""),
+        ("Pinch to zoom and two-finger scrolling control the remote Mac", ""),
     ].iter().cloned().collect();
 }
