@@ -1248,6 +1248,8 @@ impl Connection {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     fn handle_input(receiver: std_mpsc::Receiver<MessageInput>, tx: Sender) {
         let mut block_input_mode = false;
+        #[cfg(target_os = "macos")]
+        let mut native_gesture_conn = None;
         #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             rdev::set_mouse_extra_info(enigo::ENIGO_INPUT_EXTRA_VALUE);
@@ -1281,6 +1283,8 @@ impl Connection {
                         }
                     }
                     MessageInput::Pointer((msg, id)) => {
+                        #[cfg(target_os = "macos")]
+                        if msg.has_native_gesture() { native_gesture_conn = Some(id); }
                         handle_pointer(&msg, id);
                     }
                     MessageInput::BlockOn => {
@@ -1320,6 +1324,10 @@ impl Connection {
         }
         #[cfg(target_os = "linux")]
         clear_remapped_keycode();
+        #[cfg(target_os = "macos")]
+        if let Some(conn) = native_gesture_conn {
+            dispatch::Queue::main().exec_async(move || crate::platform::macos::native_gestures::cancel(conn));
+        }
         log::debug!("Input thread exited");
     }
 
@@ -1970,6 +1978,8 @@ impl Connection {
                 platform_additions.insert("is_wayland".into(), json!(true));
             }
         }
+        #[cfg(target_os = "macos")]
+        platform_additions.insert("native_gestures".into(), json!(true));
         #[cfg(target_os = "windows")]
         {
             platform_additions.insert(
@@ -3233,7 +3243,7 @@ impl Connection {
                     }
                     self.update_auto_disconnect_timer();
                 }
-                Some(message::Union::PointerDeviceEvent(pde)) => {
+                Some(message::Union::PointerDeviceEvent(mut pde)) => {
                     if self.is_authed_view_camera_conn() {
                         return true;
                     }
@@ -3268,6 +3278,8 @@ impl Connection {
                     #[cfg(not(any(target_os = "android", target_os = "ios")))]
                     if self.peer_keyboard_enabled() {
                         MOUSE_MOVE_TIME.store(get_time(), Ordering::SeqCst);
+                        #[cfg(target_os = "macos")]
+                        self.retina.on_native_gesture(&mut pde, self.display_idx);
                         self.input_pointer(pde, self.inner.id());
                     }
                     self.update_auto_disconnect_timer();
@@ -6755,6 +6767,25 @@ struct Retina {
 
 #[cfg(target_os = "macos")]
 impl Retina {
+    fn on_native_gesture(&mut self, event: &mut PointerDeviceEvent, current: usize) {
+        if let Some(pointer_device_event::Union::NativeGesture(gesture)) = &mut event.union {
+            let mut position = MouseEvent {
+                x: gesture.x,
+                y: gesture.y,
+                ..Default::default()
+            };
+            self.on_mouse_event(&mut position, current);
+            gesture.x = position.x;
+            gesture.y = position.y;
+            if let Some(display) = self.displays.get(current) {
+                if display.scale > 1.0 {
+                    gesture.delta_x /= display.scale;
+                    gesture.delta_y /= display.scale;
+                }
+            }
+        }
+    }
+
     #[inline]
     fn set_displays(&mut self, displays: &Vec<DisplayInfo>) {
         self.displays = displays.clone();
@@ -7475,6 +7506,35 @@ mod test {
             &list(&["111111111", "123456789", "222222222"]),
             "123456789@example.com:21116"
         ));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn native_gesture_retina() {
+        let mut retina = Retina {
+            displays: vec![DisplayInfo {
+                x: -1000,
+                y: 0,
+                width: 1000,
+                height: 1000,
+                scale: 2.0,
+                ..Default::default()
+            }],
+        };
+        let mut event = PointerDeviceEvent::new();
+        event.set_native_gesture(NativeGesture {
+            x: -500,
+            y: 400,
+            delta_x: 12.0,
+            delta_y: -20.0,
+            magnification: 0.25,
+            ..Default::default()
+        });
+        retina.on_native_gesture(&mut event, 0);
+        let gesture = event.native_gesture();
+        assert_eq!((gesture.x, gesture.y), (-750, 200));
+        assert_eq!((gesture.delta_x, gesture.delta_y), (6.0, -10.0));
+        assert_eq!(gesture.magnification, 0.25);
     }
 
     #[cfg(target_os = "macos")]

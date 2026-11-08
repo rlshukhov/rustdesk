@@ -23,8 +23,12 @@ fn build_mac() {
             b.flag("-DNO_InputMonitoringAuthStatus=1");
         }
     }
-    b.flag("-std=c++17").file(file).compile("macos");
+    b.flag("-std=c++17")
+        .file(file)
+        .file("src/platform/macos/native_gestures.mm")
+        .compile("macos");
     println!("cargo:rerun-if-changed={}", file);
+    println!("cargo:rerun-if-changed=src/platform/macos/native_gestures.mm");
 }
 
 #[cfg(all(windows, feature = "inline"))]

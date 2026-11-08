@@ -10,6 +10,7 @@ import 'package:flutter_hbb/common.dart';
 import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/models/model.dart';
 import 'package:flutter_hbb/models/input_model.dart';
+import 'package:flutter_hbb/common/macos_gesture.dart';
 
 import './gestures.dart';
 
@@ -92,6 +93,7 @@ class _RawTouchGestureDetectorRegionState
   int _cacheLongPressPositionTs = 0;
   double _mouseScrollIntegral = 0; // mouse scroll speed controller
   double _scale = 1;
+  MacOSGesture? _macOSGesture;
 
   // Workaround tap down event when two fingers are used to scale(mobile)
   TapDownDetails? _lastTapDownDetails;
@@ -116,6 +118,18 @@ class _RawTouchGestureDetectorRegionState
   bool get handleTouch => (isDesktop || isWebDesktop) || ffiModel.touchMode;
   SessionID get sessionId => ffi.sessionId;
   bool get canvasLocked => isMobile && ffi.canvasModel.locked;
+
+  void _sendMacOSGesture(Map<String, dynamic>? packet) {
+    if (packet != null) {
+      bind.sessionSendPointer(sessionId: sessionId, msg: json.encode(packet));
+    }
+  }
+
+  @override
+  void dispose() {
+    _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -452,6 +466,19 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
+    if (isMobile && ffiModel.nativeMacOSGestures &&
+        ffiModel.supportsNativeMacOSGestures && ffiModel.keyboard &&
+        !ffiModel.viewOnly && !widget.isCamera && !canvasLocked &&
+        !isSpecialHoldDragActive && !inputModel.relativeMouseMode.value) {
+      final position = ffi.cursorModel.getRemotePosInRect(d.localFocalPoint);
+      if (position != null &&
+          !ffi.cursorModel.shouldBlock(d.localFocalPoint.dx, d.localFocalPoint.dy)) {
+        _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+        _macOSGesture = MacOSGesture(
+            position, d.localFocalPoint, ffi.canvasModel.scale);
+        inputModel.sendMouse('up', MouseButtons.left);
+      }
+    }
     if (isSpecialHoldDragActive) {
       // Initialize the last focal point to calculate deltas manually.
       _lastSpecialHoldDragFocalPoint = d.focalPoint;
@@ -460,6 +487,15 @@ class _RawTouchGestureDetectorRegionState
 
   onTwoFingerScaleUpdate(ScaleUpdateDetails d) async {
     if (isNotTouchBasedDevice()) {
+      return;
+    }
+    if (_macOSGesture != null) {
+      if (!ffiModel.keyboard || ffiModel.viewOnly) {
+        _sendMacOSGesture(_macOSGesture?.end(cancelled: true));
+        _macOSGesture = null;
+        return;
+      }
+      _sendMacOSGesture(_macOSGesture!.update(d.scale, d.localFocalPoint));
       return;
     }
 
@@ -499,7 +535,11 @@ class _RawTouchGestureDetectorRegionState
     if (isNotTouchBasedDevice()) {
       return;
     }
-    if ((isDesktop || isWebDesktop)) {
+    if (_macOSGesture != null) {
+      _sendMacOSGesture(_macOSGesture?.end());
+      _macOSGesture = null;
+      _scale = 1;
+    } else if ((isDesktop || isWebDesktop)) {
       if (widget.isCamera) return;
       await bind.sessionSendPointer(
           sessionId: sessionId,
